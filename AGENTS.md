@@ -12,6 +12,10 @@ Build a private, account-based library for users to play games they are legally 
 - Never bundle ROMs, BIOS, firmware, user saves, or credentials.
 - Client code must never receive service-role keys or R2 secrets. Server operations derive ownership from a verified session.
 - Emulator integration must use pinned, reviewed assets and a per-console/browser compatibility matrix. Do not claim support until a redistributable test ROM has been run.
+- The player targets two modes: PC (keyboard, configurable mappings, Gamepad API, fullscreen where supported) and iPhone touch-first (multi-touch overlay, safe-area-aware portrait/landscape layouts, installed PWA where available). Mode suggestions use capabilities, never user-agent sniffing, and users can switch manually.
+- Input is normalized into console-independent actions and analog axes. Keyboard, gamepad, touch controls, and emulator core bindings are separate adapters. Store profiles by console; keep device-specific layouts local unless the user explicitly syncs them.
+- iPhone browser limits are part of the contract: feature-detect fullscreen and Gamepad APIs, request audio from a user gesture, and do not promise true fullscreen or Bluetooth controller availability across iOS/browser versions.
+- A cross-device save is usable only when the game identity and save format/core compatibility checks pass. Battery saves and core-specific states remain distinct.
 - Treat the 900 MB per-user quota and shared reserve as enforced limits, not UI hints. Recheck current provider pricing before launch.
 
 ## Coding conventions
@@ -28,6 +32,9 @@ Build a private, account-based library for users to play games they are legally 
 - Before a change is complete, run `npm run lint`, `npm run typecheck`, and `npm run build` when dependencies are available.
 - Add focused unit/integration/E2E coverage alongside implemented service functionality. Run tests relevant to changed behavior.
 - Emulator support requires test-ROM execution on each claimed system and recorded target browser/device results.
+- PC input requires keyboard remap tests, supported controller hot-plug tests, analog dead-zone tests for N64, and fullscreen feature-detection tests.
+- iPhone mode requires actual iPhone Safari and installed-PWA testing in portrait/landscape, safe-area and home-indicator checks, simultaneous multi-touch, scroll/selection suppression limited to the controls, controller capability checks, audio, IndexedDB persistence, and performance.
+- Never claim full iPhone compatibility until real gameplay, input, audio, persistence, and performance pass on recorded device/browser versions.
 - Database migrations must be reviewed for ownership, constraints, and RLS. Never treat a proposal as applied.
 
 ## Security requirements

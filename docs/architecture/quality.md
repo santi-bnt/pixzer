@@ -28,3 +28,10 @@ There are no unit, integration, or end-to-end test suites in Phase 1. A successf
 - Confirm service role and R2 secrets never enter browser bundles, logs, or CI artifacts.
 - Test account deletion and object deletion/reconciliation paths.
 - Keep ROMs, BIOS/firmware, user saves, and local environment files out of source control.
+
+## Player compatibility testing
+
+- **PC mode:** run each redistributable ROM in current Chromium, Firefox, and Safari desktop targets. Test keyboard defaults/remapping, Xbox and PlayStation pads, compatible USB/Bluetooth devices, Gamepad API availability and hot-plug, profile persistence per console, N64 analog calibration/dead zones, fullscreen entry/exit/fallback, audio, and save lifecycle.
+- **iPhone mode:** use physical iPhone hardware. Record device model, iOS, Safari version, and whether tested in a Safari tab or Home Screen-installed PWA. Test portrait and landscape, safe-area insets/home indicator, touch hit targets and simultaneous multi-touch, pointer cancellation/stuck-button release, scroll/selection/context-menu behavior within controls, DS lower-screen touch, N64 virtual stick/C buttons, audio start/resume, controller exposure where available, IndexedDB after relaunch, and frame pacing/memory under gameplay.
+- **Mode selection:** test capability-based suggestions with touch and non-touch devices, connected/disconnected pads, and installed PWA; verify a manual mode override always wins and that no user-agent string is required.
+- Compatibility is recorded per console × core version × browser mode × device. Full iPhone support is blocked until gameplay, input, audio, persistence, and performance all pass; a layout render alone is not acceptance.

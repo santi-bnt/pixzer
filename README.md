@@ -1,10 +1,10 @@
 # PocketArcade
 
-PocketArcade is a private, account-based library for playing retro games that users are legally allowed to use in a desktop browser. It is an early foundation for a small invited community. No games, BIOS files, firmware, or save files are included.
+PocketArcade is a private, account-based library for playing retro games that users are legally allowed to use on PC and iPhone. The product targets keyboard/controller desktop play and a touch-first iPhone Safari/installed-PWA experience for a small invited community. These are planned modes, not current compatibility claims. No games, BIOS files, firmware, or save files are included.
 
 ## Current status
 
-Phase 1 provides a Next.js application foundation, responsive interface routes, typed Supabase/R2 contracts, proposed database schema, architecture documentation, and CI. Sign-in, registration, uploads, cloud storage, emulator execution, controller input, and save synchronization are not implemented yet.
+Phase 1 provides a Next.js application foundation, responsive interface routes, typed Supabase/R2 and player-input contracts, proposed database schema, architecture documentation, and CI. Sign-in, registration, uploads, cloud storage, emulator execution, controller input, iPhone touch controls, and save synchronization are not implemented yet.
 
 | System                               | Planned extension     | Current status                                    |
 | ------------------------------------ | --------------------- | ------------------------------------------------- |
@@ -15,6 +15,8 @@ Phase 1 provides a Next.js application foundation, responsive interface routes, 
 | Nintendo 64 (`.n64`, `.z64`, `.v64`) | EmulatorJS `n64` core | Not integrated or tested                          |
 
 EmulatorJS licensing, core licenses, BIOS/firmware requirements, browser performance, and per-console compatibility must be reviewed before release. A documentation-listed core is not a PocketArcade compatibility claim.
+
+The iPhone mode is planned for Safari and Home Screen-installed web apps, with iOS-specific fallbacks. Interactive fullscreen, Bluetooth controller exposure, audio activation, and storage behavior vary by iOS and browser context; full iPhone support will not be claimed until real gameplay, input, audio, persistence, and performance pass on recorded devices. See the [player design and test gates](docs/architecture/emulation.md).
 
 ## Technology
 
@@ -49,19 +51,20 @@ Copy `.env.example` to `.env.local` only when configuring integrations. Phase 1 
 
 ## Architecture and security
 
-Read [system architecture](docs/architecture/system.md), [database proposal](docs/architecture/database.md), [private storage flow](docs/architecture/storage.md), [emulator feasibility](docs/architecture/emulation.md), [save strategy](docs/architecture/saves.md), [free-tier estimates](docs/architecture/free-tiers.md), and [security/quality plan](docs/architecture/quality.md). The initial SQL file is a proposal and has not been applied. Private objects must be accessed through authenticated, short-lived server-issued URLs. The server derives ownership from a validated session, enforces quotas, and reconciles storage metadata. No public bucket is permitted for user content.
+Read [system architecture](docs/architecture/system.md), [roadmap and acceptance gates](docs/architecture/roadmap.md), [database proposal](docs/architecture/database.md), [private storage flow](docs/architecture/storage.md), [PC/iPhone player and emulator design](docs/architecture/emulation.md), [save strategy](docs/architecture/saves.md), [free-tier estimates](docs/architecture/free-tiers.md), and [security/quality plan](docs/architecture/quality.md). The initial SQL file is a proposal and has not been applied. Private objects must be accessed through authenticated, short-lived server-issued URLs. The server derives ownership from a validated session, enforces quotas, and reconciles storage metadata. No public bucket is permitted for user content.
 
 The initial planning ceiling is 900 MB per account for roughly ten invited users, reserving capacity against a nominal R2 Standard 10 GB-month free storage allowance. This is a planning target, not a promise of zero cost; request/operation counts, retained copies, other provider usage, and future pricing can affect cost. Confirm current provider terms and configure usage monitoring before launch.
 
 ## Roadmap
 
-1. **Phase 1:** architecture, repository, design system, foundation (current).
+1. **Phase 1:** architecture, repository, design system, foundation, shared player/input contracts (current).
 2. **Phase 2:** Supabase Auth, PostgreSQL migrations, sessions, and RLS.
 3. **Phase 3:** R2 private uploads, library persistence, quotas, recovery, and deletion.
-4. **Phase 4:** GB/GBC/GBA emulation, each validated independently.
-5. **Phase 5:** Nintendo DS and Nintendo 64 integration and per-console tests.
-6. **Phase 6:** local and cloud save persistence, conflict resolution, and controls.
-7. **Phase 7:** security hardening, integration/E2E tests, CI expansion, and authorized Vercel deployment.
+4. **Phase 4:** GB/GBC/GBA PC emulation, keyboard/gamepad adapters, remapping, fullscreen where supported, and per-console/browser validation.
+5. **Phase 5:** Nintendo DS and Nintendo 64 PC integration; per-console input profiles, N64 analog controls, and desktop controller tests.
+6. **Phase 6:** IndexedDB and private cloud saves, compatibility-gated PC↔iPhone continuation, conflict resolution, and shared account metadata/favorites.
+7. **Phase 7:** iPhone Safari and installed-PWA player mode: virtual multi-touch controls, configurable layout, safe areas, portrait/landscape and DS touch screen.
+8. **Phase 8:** security hardening, cross-device/browser/device tests, CI expansion, and authorized Vercel deployment.
 
 ## GitHub
 

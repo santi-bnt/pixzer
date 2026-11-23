@@ -11,7 +11,11 @@ Status: design proposal for Phase 1. This migration has not been applied to a Su
 
 ## Initial entities
 
-`profiles` holds optional display name and lifecycle metadata. `games` is the owner-scoped library record, including console and verified object size/hash. `saves` describes versioned save artifacts associated with a game. `upload_sessions` is an upload intent/state machine used to reconcile a short-lived R2 upload with a game record. None of these tables contain ROM or save contents.
+`profiles` holds optional display name and lifecycle metadata. `games` is the owner-scoped library record, including console, verified object size/hash, title/display metadata, and `is_favorite`. This makes favorites and game metadata available from the same account on PC and iPhone. `saves` describes versioned save artifacts associated with a game. `upload_sessions` is an upload intent/state machine used to reconcile a short-lived R2 upload with a game record. None of these tables contain ROM or save contents.
+
+Per-console keyboard/gamepad mappings and iPhone touch-layout calibration are device preferences in the first design, because key codes, controller hardware, safe areas, and touch geometry differ by device. Export/import can be added; an account-level synchronized preset is optional and must not replace the local override.
+
+Favorite changes remain server-mediated in the initial policy set: the authenticated route scopes the game row to the current user, then updates `is_favorite`. This keeps the selected policy model consistent until a reviewed, column-restricted RLS mutation policy is added.
 
 The `games.size_bytes` ceiling is only a per-object sanity bound; a SQL `CHECK` cannot enforce the 900 MB aggregate account quota. Phase 3 must reserve aggregate bytes transactionally (including pending uploads and retained data) and enforce the global storage ceiling in trusted server code or a narrowly scoped database function. RLS alone does not make quota accounting race-safe.
 

@@ -29,3 +29,9 @@ Store battery saves separately from emulator save states. A state artifact recor
 **Status:** Planning assumption.
 
 The target 900 MB per invited account leaves about 1 GB of a nominal 10 GB-month pool when ten accounts fill quota. This reserve can be exhausted by temporary copies, retained saves, and growth. Enforce per-user and global committed plus reserved bytes and recheck provider pricing and included usage before launch.
+
+## ADR-006: One player core, capability-selected presentation modes
+
+**Status:** Accepted for architecture; player implementation is planned.
+
+PC and iPhone modes share the same account, library, game metadata/favorites, and compatible cloud-save heads. Keep one player lifecycle and normalize keyboard, physical gamepad, and virtual-touch input into canonical actions. Device capability signals suggest a presentation mode, while a saved manual choice wins. Per-console input profiles may have device-local overrides. iPhone Safari/PWA behavior, fullscreen, gamepad exposure, audio, and storage are feature-detected and tested on actual devices; no user-agent-only branch or universal compatibility promise is allowed.

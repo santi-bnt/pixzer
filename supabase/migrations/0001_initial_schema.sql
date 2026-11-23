@@ -16,6 +16,7 @@ create table if not exists public.games (
   title text not null check (char_length(title) between 1 and 160),
   console text not null check (console in ('gb', 'gbc', 'gba', 'nds', 'n64')),
   file_name text not null check (char_length(file_name) between 1 and 255),
+  is_favorite boolean not null default false,
   object_key text not null unique,
   size_bytes bigint not null check (size_bytes > 0 and size_bytes <= 900000000),
   sha256 text not null check (sha256 ~ '^[a-f0-9]{64}$'),

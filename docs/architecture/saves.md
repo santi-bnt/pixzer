@@ -8,7 +8,7 @@ No save system is implemented in Phase 1. The proposal separates in-game battery
 
 1. **Emulator memory:** the current core's in-memory state; lost on crash or tab termination.
 2. **Local browser persistence:** IndexedDB stores per-game save records and optional import/export artifacts. Browser storage can be evicted, cleared, or unavailable; it is a recovery cache, not the only durable copy. Ask for persistent storage where supported, but do not promise it.
-3. **Cloud save objects (later phase):** private R2 binary objects with PostgreSQL metadata and ownership policy. Sync is a Phase 6 capability after Auth, RLS, object signing, and upload flows exist.
+3. **Cloud save objects (later phase):** private R2 binary objects with PostgreSQL metadata and ownership policy. Sync is a Phase 6 capability after Auth, RLS, object signing, and upload flows exist. PC and iPhone use the same account and save heads; a save only appears as resumable on the other device after the compatibility gate passes.
 
 Use IndexedDB over localStorage because saves are binary and can exceed small synchronous key/value limits. Suggested stores:
 
@@ -35,6 +35,8 @@ Never overwrite a different ROM's save because display titles match. Same-game i
 ## Cloud sync and conflict rules (Phase 6)
 
 Treat saves as immutable versions. Metadata records a current head revision plus parent revision and checksum. Server authorization derives the owner from the verified session; clients never choose owner IDs. For uploads, require an expected parent revision and idempotency key. The server commits metadata only after object upload verification, and garbage-collects abandoned objects after a grace period.
+
+For cross-device continuation, require the same authenticated account, immutable game checksum, console ID, save kind, and a recognized artifact format. Battery saves may transfer when both tested emulator integrations use compatible save formats; verify per console/core before advertising continuation. Save states default to exact emulator/core build and configuration compatibility and must not be offered on another device/core without a recorded compatibility result. If the target cannot consume the artifact, preserve it in cloud storage and offer download/export; never silently import it or relabel it as compatible.
 
 On download, compare local and cloud checksums/revisions. If local head equals the server's parent, upload as a new revision. If remote advanced independently, preserve both as conflict copies and ask the user to choose or export; do not silently last-write-wins a save. A later product decision may allow deterministic merge only for save kinds/cores proven mergeable. Keep conflicts until a user explicitly resolves them.
 
