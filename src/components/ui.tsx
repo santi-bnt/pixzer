@@ -2,15 +2,15 @@ import type { ReactNode } from "react";
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <span className="flex items-center gap-3 font-semibold tracking-tight">
+    <span
+      className={`flex items-center gap-3 font-semibold tracking-tight ${compact ? "text-xl" : "text-2xl"}`}
+    >
       <span className="grid size-9 place-items-center rounded-xl bg-accent text-lg text-[var(--accent-contrast)] shadow-[0_6px_24px_var(--accent-soft)]">
         ◈
       </span>
-      {!compact && (
-        <span>
-          pix<span className="text-accent">zer</span>
-        </span>
-      )}
+      <span>
+        pix<span className="text-accent">zer</span>
+      </span>
     </span>
   );
 }
