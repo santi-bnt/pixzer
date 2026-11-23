@@ -5,6 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "pixzer — Your games, close at hand",
   applicationName: "pixzer",
+  manifest: "/manifest.webmanifest",
   description:
     "A private library for playing your legally obtained retro games in the browser.",
 };

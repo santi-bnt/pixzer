@@ -1,24 +1,27 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 
-export function Brand({
-  compact = false,
-  prominent = false,
-}: {
-  compact?: boolean;
-  prominent?: boolean;
-}) {
+export function Brand() {
   return (
-    <span
-      className={`flex items-center font-semibold tracking-tight ${prominent ? "gap-2 text-[1.375rem] sm:gap-3 sm:text-[1.875rem]" : "gap-3"} ${prominent ? "" : compact ? "text-xl" : "text-2xl"}`}
-    >
-      <span
-        className={`grid place-items-center rounded-xl bg-accent text-[var(--accent-contrast)] shadow-[0_6px_24px_var(--accent-soft)] ${prominent ? "size-10 text-lg sm:size-[3.125rem] sm:text-2xl" : "size-9 text-lg"}`}
-      >
-        ◈
-      </span>
-      <span>
-        pix<span className="text-accent">zer</span>
-      </span>
+    <span className="inline-flex shrink-0 items-center">
+      <Image
+        src="/brand/pixzer-horizontal.png"
+        alt="pixzer"
+        width={764}
+        height={268}
+        sizes="(max-width: 640px) 114px, 159px"
+        className="brand-logo brand-logo--light h-10 w-auto max-w-full object-contain sm:h-14"
+        preload
+      />
+      <Image
+        src="/brand/pixzer-horizontal-dark.png"
+        alt="pixzer"
+        width={764}
+        height={268}
+        sizes="(max-width: 640px) 114px, 159px"
+        className="brand-logo brand-logo--dark h-10 w-auto max-w-full object-contain sm:h-14"
+        preload
+      />
     </span>
   );
 }

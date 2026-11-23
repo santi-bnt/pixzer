@@ -15,12 +15,7 @@ export default function HomePage() {
     <main className="hero-glow min-h-screen overflow-hidden">
       <header className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-4 sm:gap-3 sm:px-6 sm:py-5">
         <Link href="/" aria-label="pixzer home">
-          <span className="sm:hidden">
-            <Brand compact prominent />
-          </span>
-          <span className="hidden sm:inline-flex">
-            <Brand prominent />
-          </span>
+          <Brand />
         </Link>
         <nav className="flex items-center gap-1 sm:gap-5">
           <AppearanceSelect compact />
