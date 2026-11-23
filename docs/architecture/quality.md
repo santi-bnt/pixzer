@@ -17,7 +17,7 @@ Node.js 22 is used in CI. Next.js documents Node.js 20.9 as the minimum; use a s
 
 ## Current limits
 
-Phase 1 had no application-level unit, integration, or end-to-end suites. Phase 2 currently defines 48 pgTAP assertions for grants, invitation authorization, and two-user RLS isolation in `supabase/tests/0002_auth_rls.test.sql`; they have not been executed against a database in this checkout. No browser E2E suite currently validates Google OAuth, invitation, email login, logout, recovery, or account linking against a configured Supabase project. A successful Next.js build verifies compilation only; it does not establish live Auth, RLS, R2 authorization/quota behavior, emulator compatibility, or save synchronization.
+Phase 2 defines 48 pgTAP assertions for grants, invitation authorization, and two-user RLS isolation in `supabase/tests/0002_auth_rls.test.sql`; they have passed on development project `pxxtzjpjtigikolauxwc`. No browser E2E suite currently validates Google OAuth, invitation, email login, logout, recovery, or account linking against a configured Supabase project. A successful Next.js build verifies compilation only; it does not establish live Auth, R2 authorization/quota behavior, emulator compatibility, or save synchronization.
 
 ## Security review checklist for later phases
 

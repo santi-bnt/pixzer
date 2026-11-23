@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 2 uses Supabase Auth for identity and PostgreSQL Row Level Security (RLS) for browser-visible metadata. The migration is reviewed local SQL, not evidence that a hosted database has been configured or changed. Authentication and authorization are separate checks: Next.js server code verifies the user's claims, and PostgreSQL independently filters rows and enforces grants.
+Phase 2 uses Supabase Auth for identity and PostgreSQL Row Level Security (RLS) for browser-visible metadata. The schema and policies have been applied and verified on the dedicated development project `pxxtzjpjtigikolauxwc`; real browser Auth flows and hosted provider settings remain unverified. Authentication and authorization are separate checks: Next.js server code verifies the user's claims, and PostgreSQL independently filters rows and enforces grants.
 
 ## Trust boundaries
 

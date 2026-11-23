@@ -2,7 +2,7 @@
 
 ## Current state
 
-Invite-only Auth UI, cookie-backed SSR clients, a protected account shell, callback handling, local Supabase CLI configuration, and SQL/RLS tests are present in this checkout. The CLI is installed as a development dependency, but this machine has no Docker-compatible container runtime and there is no `.env.local` or linked Supabase project. Auth and database behavior have therefore not been exercised. The migration is not applied; review its target schema, grants, RLS tests, and project settings before applying it anywhere hosted.
+Invite-only Auth UI, cookie-backed SSR clients, a protected account shell, callback handling, local Supabase CLI configuration, and SQL/RLS tests are present in this checkout. The initial schema migration has been applied to the dedicated development project `pxxtzjpjtigikolauxwc`; all four tables, six policies, and 48 pgTAP assertions were verified there. Live browser Auth flows remain unverified. This checkout has no `.env.local` or Supabase application variables, and the Supabase MCP tools available to this session do not expose hosted Auth provider or email-template settings.
 
 ## Create local configuration
 
@@ -14,7 +14,7 @@ Invite-only Auth UI, cookie-backed SSR clients, a protected account shell, callb
 
 ## Configure invite-only access
 
-1. In Supabase Authentication settings, disable public sign-ups and enable email/password for existing invited users. Require email confirmation.
+1. In the development project's Authentication settings, disable public sign-ups and anonymous sign-ins; keep email/password enabled for existing invited users, require email confirmation, and set minimum password length to 12. Confirm that only the administrator can send invites. The local CLI config uses the same signup, confirmation, and password-length requirements.
 2. Set the project Site URL to the local app origin during development, and add the local callback URL (for example `http://localhost:3000/auth/confirm`) plus the production callback URL to the allowed redirect list when production is authorized.
 3. In **Authentication → Email Templates → Invite user**, configure the confirmation link to target the application callback with the token hash and invite type, then continue to the invite-only password setup page. Example for an HTML template:
 
@@ -40,20 +40,21 @@ The callback accepts the configured PKCE code and token-hash email flows, valida
 
 ## Configure Google OAuth
 
-1. In a dedicated Supabase development project, open **Authentication → Sign In / Providers → Google** and enable Google. Use the provider callback URL displayed by Supabase Auth as the authorized redirect URI in Google Cloud; keep Google client ID/secret in the provider configuration, not in app browser variables.
-2. In Supabase URL Configuration, add the exact app callback URL for each approved origin, such as `http://localhost:3000/auth/confirm` for local development and `https://<approved-app-domain>/auth/confirm` for an authorized deployment. Do not use broad production wildcards.
-3. Set `NEXT_PUBLIC_SITE_URL` to the same app origin. Local OAuth starts only from loopback HTTP; deployed actions require the request origin to match this setting or Vercel's deployment URL.
-4. Keep public sign-ups disabled. A Google identity is not an invitation: the callback and protected server routes require Supabase's trusted `invited_at` marker, and RLS checks the same authorization state. When a Google identity uses the same verified email as an existing invited Auth user, rely on Supabase Auth's automatic identity linking to retain that Auth user ID. Do not implement app-side account merging or trust editable metadata.
-5. Test with an already invited email account and a separate uninvited Google identity. Confirm that the invited user retains the same Auth user ID/library after verified linking, while the uninvited identity is rejected and sees no private rows. Supabase documents automatic linking for matching verified emails and warns against linking to unverified identities: [Identity Linking](https://supabase.com/docs/guides/auth/auth-identity-linking).
+1. In Google Cloud Console, configure the OAuth consent screen for the web app. While the app is in Testing, add only the controlled Google test accounts as test users. Create an OAuth client of type **Web application**. Add `http://localhost:3000` as an Authorized JavaScript origin for local development. In Authorized redirect URIs, add the callback shown on the Supabase project's Google provider page; for this project it is expected to be `https://pxxtzjpjtigikolauxwc.supabase.co/auth/v1/callback`. Copy the displayed value exactly.
+2. In the development project's **Authentication → Sign In / Providers → Google**, enable Google and enter that OAuth client's ID and secret. Keep the secret in Supabase provider configuration, never in app environment variables or browser code.
+3. In Supabase URL Configuration, set the development Site URL to `http://localhost:3000` and add the exact app callback `http://localhost:3000/auth/confirm` to the Redirect URLs list. The Google-to-Supabase callback above and the Supabase-to-app callback here are different redirects. Do not add production origins until a production deployment is explicitly authorized; avoid broad wildcards.
+4. Set `NEXT_PUBLIC_SITE_URL=http://localhost:3000` in the local app environment. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the project's API settings. These are the only Supabase values the app needs; do not add a service-role key or Google client secret.
+5. Keep `auth.enable_signup=false`, anonymous sign-ins disabled, and manual identity linking disabled. Google sign-in is not an invitation: the callback and protected server routes require the trusted `invited_at` marker, and RLS checks the same authorization state. When Google presents the same verified email as an existing invited Auth user, rely on Supabase Auth's automatic identity linking to retain that Auth user ID. Do not implement app-side account merging or trust editable metadata.
+6. Test an invited email identity and a separate uninvited Google identity. Confirm the invited user's Auth user ID remains unchanged after verified linking, while the uninvited account is rejected and cannot access private rows. Supabase documents automatic linking for matching emails and the risk of linking unverified emails: [Identity Linking](https://supabase.com/docs/guides/auth/auth-identity-linking).
 
 Google client credentials and a verified provider configuration are external setup requirements. They are intentionally absent from `.env.example`; the Google provider remains disabled in local Supabase config until credentials are supplied through Supabase's supported secret configuration.
 
 ## Apply and verify the schema
 
-1. Review `supabase/migrations/0001_initial_schema.sql` and the RLS tests under `supabase/tests/`.
+1. The reviewed `supabase/migrations/0001_initial_schema.sql` is already applied to development. Review `supabase/tests/0002_auth_rls.test.sql` before rerunning it.
 2. Preferred local route: start Docker Desktop, run `npx supabase start`, then `npx supabase test db`. This validates the migration and pgTAP suite on the local stack without touching a hosted database.
 3. Docker-free hosted route: use only a dedicated, explicitly authorized development project. Install PostgreSQL command-line tools so `psql` is on PATH, set `PIXZER_DEV_PROJECT_REF` and `PIXZER_DEV_DATABASE_URL` in the current PowerShell session, and run `./scripts/test-pgtap-remote.ps1`. The script accepts only a direct Supabase database URL or session-pooler URL whose project ref matches, asks you to type the ref again, executes the existing test SQL, and verifies the TAP plan plus every declared assertion (currently 48). It never applies the migration. `psql`'s process environment receives the password; the script does not print or save the connection string. Do not run this against production: pgTAP extension creation and the test transaction are database operations.
-4. Before applying the migration to the dev project, inspect its project ref and current schema/migration history. Apply only after explicit authorization; the migration uses `DROP POLICY IF EXISTS` and must not be run against an unknown target.
+4. Do not reapply the initial migration to the existing development project. Any future schema change requires a new reviewed migration and explicit authorization.
 5. Verify signed-out access is denied and two distinct users cannot read or mutate each other's rows. Test the intended owner-only favorite update and ensure uploads/saves remain non-writable in this phase.
 
 ### Windows 11 prerequisites for hosted pgTAP

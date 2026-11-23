@@ -11,9 +11,9 @@ The phases are ordered by dependency. Do not start a phase's dependent implement
 
 ## Phase 2 — Accounts, PostgreSQL, and RLS
 
-- Local implementation: email/password and Google OAuth PKCE flows, invitation password setup, recovery, cookie-backed sessions, verified invitation authorization, protected account shell, invitation-gated RLS migration, and 48 pgTAP assertions are present. Google provider credentials and a development Supabase project are not configured; the migration remains unapplied and live auth/RLS checks are pending.
-- Configure Supabase Auth for the invited cohort, verify redirect/email templates, then apply the reviewed schema to an explicitly selected development project. Library rows and favorites are account-scoped and therefore shared across devices using the same account.
-- Acceptance: run the 48 pgTAP assertions and pass two-user isolation tests against a configured development project; verify invite, email login, Google sign-in/linking, logout, recovery, and protected-route callbacks in desktop and iPhone Safari; confirm no service-role or Google client secret reaches client bundles. Live acceptance remains pending until those external checks have evidence.
+- Local implementation: email/password and Google OAuth PKCE flows, invitation password setup, recovery, cookie-backed sessions, verified invitation authorization, and the protected account shell are present. The initial schema migration is applied to development project `pxxtzjpjtigikolauxwc`; all four tables, six RLS policies, and 48 pgTAP assertions were verified. Hosted Auth provider settings and real browser flows remain unverified.
+- Configure Supabase Auth for the invited cohort and verify the development redirect URLs, Google provider, invite/recovery templates, and email confirmation settings. No production Auth or database configuration is authorized here. Library rows and favorites are account-scoped and therefore shared across devices using the same account.
+- Acceptance: the database migration and pgTAP checks pass. Still required: verify invitation, email login, Google sign-in/linking, logout, recovery, session persistence, and protected routes with two independent users in real browser sessions; verify that no service-role or Google client secret reaches client bundles. Do not mark Phase 2 complete until these checks have evidence.
 
 ## Phase 3 — Private R2 library
 

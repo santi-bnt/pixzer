@@ -39,15 +39,15 @@ values
 
 -- Anonymous requests must have neither table privileges nor policy access.
 set local role anon;
-select throws_ok($$select * from public.profiles$$, '42501', 'anon cannot read profiles');
-select throws_ok($$select * from public.games$$, '42501', 'anon cannot read games');
-select throws_ok($$select * from public.upload_sessions$$, '42501', 'anon cannot read upload sessions');
-select throws_ok($$select * from public.saves$$, '42501', 'anon cannot read saves');
-select throws_ok($$select public.is_invited_pixzer_user()$$, '42501', 'anon cannot call invitation predicate');
-select throws_ok($$update public.profiles set display_name = 'Anonymous'$$, '42501', 'anon cannot update profiles');
-select throws_ok($$update public.games set is_favorite = true$$, '42501', 'anon cannot update games');
-select throws_ok($$insert into public.upload_sessions (user_id, object_key, file_name, title, console, expected_size_bytes, expires_at) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'anon/key', 'x.gb', 'X', 'gb', 1, now() + interval '1 hour')$$, '42501', 'anon cannot create upload sessions');
-select throws_ok($$delete from public.saves$$, '42501', 'anon cannot delete saves');
+select throws_ok($$select * from public.profiles$$, '42501', null, 'anon cannot read profiles');
+select throws_ok($$select * from public.games$$, '42501', null, 'anon cannot read games');
+select throws_ok($$select * from public.upload_sessions$$, '42501', null, 'anon cannot read upload sessions');
+select throws_ok($$select * from public.saves$$, '42501', null, 'anon cannot read saves');
+select throws_ok($$select public.is_invited_pixzer_user()$$, '42501', null, 'anon cannot call invitation predicate');
+select throws_ok($$update public.profiles set display_name = 'Anonymous'$$, '42501', null, 'anon cannot update profiles');
+select throws_ok($$update public.games set is_favorite = true$$, '42501', null, 'anon cannot update games');
+select throws_ok($$insert into public.upload_sessions (user_id, object_key, file_name, title, console, expected_size_bytes, expires_at) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'anon/key', 'x.gb', 'X', 'gb', 1, now() + interval '1 hour')$$, '42501', null, 'anon cannot create upload sessions');
+select throws_ok($$delete from public.saves$$, '42501', null, 'anon cannot delete saves');
 reset role;
 
 -- User A sees only A's rows. Profile display name and favorite are the only
@@ -62,16 +62,16 @@ select results_eq($$update public.profiles set display_name = 'Owner A updated' 
 select results_eq($$update public.games set is_favorite = true where id = '11111111-1111-4111-8111-111111111111' returning is_favorite$$, $$select true$$, 'A updates own favorite');
 select is_empty($$update public.profiles set display_name = 'Intrusion' where id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' returning id$$, 'A cannot update B profile');
 select is_empty($$update public.games set is_favorite = true where id = '22222222-2222-4222-8222-222222222222' returning id$$, 'A cannot update B game');
-select throws_ok($$update public.games set title = 'Changed' where id = '11111111-1111-4111-8111-111111111111'$$, '42501', 'A cannot update game metadata');
-select throws_ok($$insert into public.games (user_id, title, console, file_name, object_key, size_bytes, sha256) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Injected', 'gb', 'i.gb', 'injected/key', 1, repeat('e', 64))$$, '42501', 'A cannot create game rows');
-select throws_ok($$delete from public.games where id = '11111111-1111-4111-8111-111111111111'$$, '42501', 'A cannot delete game rows');
-select throws_ok($$update public.profiles set id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'$$, '42501', 'A cannot change profile identity');
-select throws_ok($$insert into public.upload_sessions (user_id, object_key, file_name, title, console, expected_size_bytes, expires_at) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'a/new', 'x.gb', 'X', 'gb', 1, now() + interval '1 hour')$$, '42501', 'A cannot create upload sessions');
-select throws_ok($$update public.upload_sessions set status = 'completed' where id = '33333333-3333-4333-8333-333333333333'$$, '42501', 'A cannot update upload sessions');
-select throws_ok($$delete from public.upload_sessions where id = '33333333-3333-4333-8333-333333333333'$$, '42501', 'A cannot delete upload sessions');
-select throws_ok($$insert into public.saves (user_id, game_id, save_kind, revision, object_key, size_bytes, sha256) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'battery', 2, 'a/new-save', 64, repeat('f', 64))$$, '42501', 'A cannot create saves');
-select throws_ok($$update public.saves set revision = 2 where id = '55555555-5555-4555-8555-555555555555'$$, '42501', 'A cannot update saves');
-select throws_ok($$delete from public.saves where id = '55555555-5555-4555-8555-555555555555'$$, '42501', 'A cannot delete saves');
+select throws_ok($$update public.games set title = 'Changed' where id = '11111111-1111-4111-8111-111111111111'$$, '42501', null, 'A cannot update game metadata');
+select throws_ok($$insert into public.games (user_id, title, console, file_name, object_key, size_bytes, sha256) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Injected', 'gb', 'i.gb', 'injected/key', 1, repeat('e', 64))$$, '42501', null, 'A cannot create game rows');
+select throws_ok($$delete from public.games where id = '11111111-1111-4111-8111-111111111111'$$, '42501', null, 'A cannot delete game rows');
+select throws_ok($$update public.profiles set id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'$$, '42501', null, 'A cannot change profile identity');
+select throws_ok($$insert into public.upload_sessions (user_id, object_key, file_name, title, console, expected_size_bytes, expires_at) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'a/new', 'x.gb', 'X', 'gb', 1, now() + interval '1 hour')$$, '42501', null, 'A cannot create upload sessions');
+select throws_ok($$update public.upload_sessions set status = 'completed' where id = '33333333-3333-4333-8333-333333333333'$$, '42501', null, 'A cannot update upload sessions');
+select throws_ok($$delete from public.upload_sessions where id = '33333333-3333-4333-8333-333333333333'$$, '42501', null, 'A cannot delete upload sessions');
+select throws_ok($$insert into public.saves (user_id, game_id, save_kind, revision, object_key, size_bytes, sha256) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'battery', 2, 'a/new-save', 64, repeat('f', 64))$$, '42501', null, 'A cannot create saves');
+select throws_ok($$update public.saves set revision = 2 where id = '55555555-5555-4555-8555-555555555555'$$, '42501', null, 'A cannot update saves');
+select throws_ok($$delete from public.saves where id = '55555555-5555-4555-8555-555555555555'$$, '42501', null, 'A cannot delete saves');
 reset role;
 
 -- User B independently sees only B's rows and cannot mutate A's rows.
@@ -105,6 +105,7 @@ select throws_ok(
   $$insert into public.saves (user_id, game_id, save_kind, revision, object_key, size_bytes, sha256)
     values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '22222222-2222-4222-8222-222222222222', 'battery', 2, 'test/a/wrong-owner-save', 64, repeat('e', 64))$$,
   '23503',
+  null,
   'save owner/game foreign key prevents cross-owner association'
 );
 

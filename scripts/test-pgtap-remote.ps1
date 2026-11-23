@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 
 $databaseUrl = $env:PIXZER_DEV_DATABASE_URL
 $expectedProjectRef = $env:PIXZER_DEV_PROJECT_REF
+$approvedDevelopmentProjectRef = 'pxxtzjpjtigikolauxwc'
 
 if ([string]::IsNullOrWhiteSpace($databaseUrl) -or [string]::IsNullOrWhiteSpace($expectedProjectRef)) {
   throw 'Set PIXZER_DEV_DATABASE_URL and PIXZER_DEV_PROJECT_REF for a dedicated development project.'
@@ -11,6 +12,9 @@ if ([string]::IsNullOrWhiteSpace($databaseUrl) -or [string]::IsNullOrWhiteSpace(
 
 if ($expectedProjectRef -notmatch '^[a-z0-9]{20}$') {
   throw 'PIXZER_DEV_PROJECT_REF must be the 20-character Supabase project ref.'
+}
+if ($expectedProjectRef -cne $approvedDevelopmentProjectRef) {
+  throw 'PIXZER_DEV_PROJECT_REF must identify the reviewed Pixzer development project.'
 }
 
 $connection = [uri]$databaseUrl
@@ -110,7 +114,7 @@ try {
   for ($index = 0; $index -lt $expectedTestCount; $index++) {
     if ($testNumbers[$index] -ne ($index + 1)) {
       $outputLines | ForEach-Object { Write-Host $_ }
-      throw 'pgTAP output did not contain assertion numbers 1 through 40 in order.'
+      throw "pgTAP output did not contain assertion numbers 1 through $expectedTestCount in order."
     }
   }
 

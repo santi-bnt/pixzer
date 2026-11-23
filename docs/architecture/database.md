@@ -1,6 +1,6 @@
 # Database and authentication proposal
 
-Status: Phase 2 local schema and authorization contract. The migration is not applied to a Supabase project; live authentication and RLS behavior remain unverified.
+Status: Phase 2 schema applied to development project `pxxtzjpjtigikolauxwc`. The four application tables, six RLS policies, and 48 pgTAP assertions have been verified there. Real Auth provider flows remain unverified. No profile-provisioning trigger exists; profile creation is still an explicit lifecycle gap.
 
 ## Responsibilities
 

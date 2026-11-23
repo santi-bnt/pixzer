@@ -34,8 +34,8 @@ PC and iPhone use the same authenticated account and server-owned game records, 
 - `src/components`: shared responsive shell and design primitives.
 - `src/features/offline/`: typed local game/save contracts, account-partitioned IndexedDB repository, streaming checksums, storage capability helpers, a bounded sync coordinator without a cloud transport, and production-only PWA registration.
 - `src/features`: feature-specific behavior.
-- `src/lib/supabase`, `src/lib/r2`: typed boundaries, currently contracts only.
-- `supabase/migrations`: initial schema proposal; not applied.
+- `src/lib/supabase`: cookie-bound browser/server clients, Auth actions, callback verification, and invitation-gated session checks. `src/lib/r2`: typed contracts only; cloud storage operations are not implemented.
+- `supabase/migrations`: initial schema applied to the dedicated development project; real Auth flow validation remains pending.
 - `docs/architecture`: service flows, trust boundaries, decisions, and known limitations.
 
 ## Key decisions
