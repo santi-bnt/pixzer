@@ -8,11 +8,11 @@ export default function NotFound() {
         <Link className="inline-block" href="/">
           <Brand />
         </Link>
-        <div className="mt-12 text-xs font-bold uppercase tracking-[.25em] text-violet-300">
+        <div className="mt-12 text-xs font-bold uppercase tracking-[.25em] text-accent">
           404 · Off the map
         </div>
         <h1 className="mt-4 text-5xl font-semibold">This shelf is empty.</h1>
-        <p className="mt-4 text-sm leading-6 text-[#a5a8b8]">
+        <p className="mt-4 text-sm leading-6 text-muted">
           That page isn’t part of the library. Let’s get you back to a familiar
           place.
         </p>

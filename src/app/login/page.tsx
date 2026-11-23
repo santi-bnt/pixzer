@@ -1,59 +1,57 @@
-import { Brand, Button, Notice } from "@/components/ui";
 import Link from "next/link";
+import { Brand } from "@/components/ui";
+import { LoginForm } from "@/features/auth/login-form";
+import { parseOAuthError } from "@/features/auth/oauth-errors";
+import { safeNextPath } from "@/features/auth/safe-next";
+import { AppearanceSelect } from "@/features/appearance/theme-provider";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    next?: string | string[];
+    error?: string | string[];
+  }>;
+}) {
+  const params = await searchParams;
+  const requestedNext = Array.isArray(params.next)
+    ? params.next[0]
+    : params.next;
+  const requestedOAuthError = Array.isArray(params.error)
+    ? params.error[0]
+    : params.error;
+  const nextPath = safeNextPath(requestedNext);
+  const oauthError = parseOAuthError(requestedOAuthError);
+
   return (
     <main className="grid-glow grid min-h-screen place-items-center px-5 py-10">
       <div className="w-full max-w-md">
-        <Link href="/">
-          <Brand />
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/" aria-label="pixzer home">
+            <Brand />
+          </Link>
+          <AppearanceSelect compact />
+        </div>
         <div className="panel mt-9 rounded-3xl p-7 sm:p-9">
-          <div className="text-xs font-bold uppercase tracking-[.2em] text-violet-300">
+          <div className="text-xs font-bold uppercase tracking-[.2em] text-accent">
             Welcome back
           </div>
           <h1 className="mt-3 text-3xl font-semibold">
             Sign in to your library
           </h1>
-          <p className="mt-2 text-sm leading-6 text-[#a5a8b8]">
-            Account access is being built. No credentials are collected on this
-            page.
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Use the email address connected to your pixzer invitation.
           </p>
-          <div className="mt-7 space-y-4">
-            <label className="block text-sm text-[#d2d2db]">
-              Email address
-              <input
-                disabled
-                type="email"
-                placeholder="you@example.com"
-                className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm placeholder:text-[#666979]"
-              />
-            </label>
-            <label className="block text-sm text-[#d2d2db]">
-              Password
-              <input
-                disabled
-                type="password"
-                placeholder="Your password"
-                className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm placeholder:text-[#666979]"
-              />
-            </label>
-            <Button disabled>Sign in</Button>
-          </div>
-          <div className="mt-6">
-            <Notice
-              title="Not connected yet"
-              body="Supabase authentication will be introduced in Phase 2. This interface cannot sign you in."
-            />
-          </div>
-          <p className="mt-6 text-center text-sm text-[#a5a8b8]">
-            New to PocketArcade?{" "}
-            <a className="text-violet-200" href="/register">
-              Create an account
-            </a>
+          <p className="mt-3 text-xs leading-5 text-muted">
+            This signs you into your account. Game launching and emulator
+            features are not available yet.
+          </p>
+          <LoginForm nextPath={nextPath} oauthError={oauthError} />
+          <p className="mt-6 text-center text-sm text-muted">
+            Need an invitation? Contact your pixzer administrator.
           </p>
         </div>
-        <p className="mt-5 text-center text-xs text-[#727586]">
+        <p className="mt-5 text-center text-xs text-muted">
           <Link href="/" className="quiet-link">
             ← Back to home
           </Link>

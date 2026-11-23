@@ -34,11 +34,11 @@ export function readServerEnvironment(): ServerEnvironment {
 
 export function readPublicSupabaseEnvironment(): {
   url: string;
-  anonKey: string;
+  publishableKey: string;
 } | null {
   const {
     NEXT_PUBLIC_SUPABASE_URL: url,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: anonKey,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: publishableKey,
   } = process.env;
-  return url && anonKey ? { url, anonKey } : null;
+  return url && publishableKey ? { url, publishableKey } : null;
 }

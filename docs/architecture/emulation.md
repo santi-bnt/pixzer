@@ -2,7 +2,7 @@
 
 ## Status
 
-EmulatorJS is a plausible candidate, not an integrated feature. PocketArcade does not yet load the library, run a ROM, or provide BIOS files. No console is accepted as compatible until a redistributable homebrew ROM is executed through the complete production-like flow on supported browsers and results are recorded.
+EmulatorJS is a plausible candidate, not an integrated feature. pixzer does not yet load the library, run a ROM, or provide BIOS files. No console is accepted as compatible until a redistributable homebrew ROM is executed through the complete production-like flow on supported browsers and results are recorded.
 
 ## Current feasibility findings
 
@@ -15,7 +15,7 @@ The official EmulatorJS system pages list these cores:
 | Nintendo DS               | `nds` defaults to melonDS; DeSmuME and DeSmuME 2015 listed   | The melonDS docs list required ARM7/ARM9 BIOS and firmware. Do not bundle proprietary firmware; Phase 2+ must decide whether user-supplied firmware is supported and safely handled. |
 | Nintendo 64               | `n64` defaults to Mupen64Plus Next; Parallel-N64 also listed | EmulatorJS documents Parallel-N64 fallback on iOS. WebGL/GPU and core variance require a separate compatibility matrix.                                                              |
 
-These are core availability statements from EmulatorJS documentation, not PocketArcade compatibility results. The project describes itself as WebAssembly-based and says modern browsers are supported, but our product should use a tested support matrix rather than adopting that broad claim. Core and browser performance varies by device.
+These are core availability statements from EmulatorJS documentation, not pixzer compatibility results. The project describes itself as WebAssembly-based and says modern browsers are supported, but our product should use a tested support matrix rather than adopting that broad claim. Core and browser performance varies by device.
 
 ## License and distribution review
 

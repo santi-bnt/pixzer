@@ -17,7 +17,7 @@ Node.js 22 is used in CI. Next.js documents Node.js 20.9 as the minimum; use a s
 
 ## Current limits
 
-There are no unit, integration, or end-to-end test suites in Phase 1. A successful build only verifies that the foundation compiles; it does not validate Supabase policies against a live project, R2 authorization/quota behavior, emulator compatibility, or save synchronization. Those acceptance checks must be added alongside the corresponding implementation phases.
+Phase 1 had no application-level unit, integration, or end-to-end suites. Phase 2 currently defines 48 pgTAP assertions for grants, invitation authorization, and two-user RLS isolation in `supabase/tests/0002_auth_rls.test.sql`; they have not been executed against a database in this checkout. No browser E2E suite currently validates Google OAuth, invitation, email login, logout, recovery, or account linking against a configured Supabase project. A successful Next.js build verifies compilation only; it does not establish live Auth, RLS, R2 authorization/quota behavior, emulator compatibility, or save synchronization.
 
 ## Security review checklist for later phases
 
@@ -28,6 +28,14 @@ There are no unit, integration, or end-to-end test suites in Phase 1. A successf
 - Confirm service role and R2 secrets never enter browser bundles, logs, or CI artifacts.
 - Test account deletion and object deletion/reconciliation paths.
 - Keep ROMs, BIOS/firmware, user saves, and local environment files out of source control.
+
+## Appearance and theme validation
+
+- Validate the same routes and component states in Light, Dark, and System using the shared tokens in [the visual system](design-system.md); do not accept one screenshot or test one theme only.
+- Verify saved local preference before sign-in, OS appearance changes in System mode, immediate no-reload theme switching, and first-paint behavior without a wrong-theme flash or hydration warning.
+- Check WCAG AA text contrast and visible focus indicators for both palettes, including controls, disabled/selected states, notifications, and error surfaces. State must not be conveyed by color alone. Check reduced-motion behavior.
+- Theme changes must not steal player focus, change keyboard/gamepad input, resize or redraw the game canvas, move virtual controls, or change touch hit regions. Exercise actual PC player and iPhone Safari/PWA flows.
+- When a Supabase project is configured, test authenticated cross-device preference sync, local fallback, offline operation, sign-in after a local preference change, and sign-out. The preference is user-editable presentation metadata, never authorization data.
 
 ## Player compatibility testing
 

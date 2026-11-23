@@ -3,12 +3,12 @@ import type { ReactNode } from "react";
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <span className="flex items-center gap-3 font-semibold tracking-tight">
-      <span className="grid size-9 place-items-center rounded-xl bg-violet-400 text-lg text-[#17131f] shadow-[0_6px_24px_rgba(152,120,245,.3)]">
+      <span className="grid size-9 place-items-center rounded-xl bg-accent text-lg text-[var(--accent-contrast)] shadow-[0_6px_24px_var(--accent-soft)]">
         ◈
       </span>
       {!compact && (
         <span>
-          Pocket<span className="text-violet-300">Arcade</span>
+          piz<span className="text-accent">xer</span>
         </span>
       )}
     </span>
@@ -28,10 +28,10 @@ export function Button({
 }) {
   const style =
     variant === "primary"
-      ? "bg-violet-300 text-[#17131f] hover:bg-violet-200"
+      ? "bg-accent text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)]"
       : variant === "secondary"
-        ? "border border-white/10 bg-white/[.06] text-white hover:bg-white/10"
-        : "text-[#b8b8c7] hover:bg-white/[.06] hover:text-white";
+        ? "border border-token bg-surface-soft text-text hover:bg-surface-raised"
+        : "text-muted hover:bg-surface-soft hover:text-text";
   const klass = `inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition ${style} ${disabled ? "cursor-not-allowed opacity-45" : ""}`;
   if (href && !disabled)
     return (
@@ -57,14 +57,14 @@ export function SectionTitle({
 }) {
   return (
     <div className="mb-6">
-      <div className="mb-2 text-xs font-bold uppercase tracking-[.2em] text-violet-300">
+      <div className="mb-2 text-xs font-bold uppercase tracking-[.2em] text-accent">
         {eyebrow}
       </div>
       <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
         {title}
       </h1>
       {children && (
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-[#a5a8b8]">
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
           {children}
         </p>
       )}
@@ -76,12 +76,12 @@ export function Notice({ title, body }: { title: string; body: string }) {
   return (
     <div className="panel rounded-2xl p-5">
       <div className="flex gap-4">
-        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-400/10 text-violet-200">
+        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">
           ✦
         </div>
         <div>
           <h2 className="font-semibold">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-[#a5a8b8]">{body}</p>
+          <p className="mt-1 text-sm leading-6 text-muted">{body}</p>
         </div>
       </div>
     </div>
@@ -98,7 +98,7 @@ export function GameTile({
   color: string;
 }) {
   return (
-    <div className="panel group rounded-2xl p-3 transition hover:-translate-y-1 hover:border-violet-300/30">
+    <div className="panel group rounded-2xl p-3 transition hover:-translate-y-1 hover:border-accent/40">
       <div
         className={`relative grid aspect-[1.35] place-items-center overflow-hidden rounded-xl ${color}`}
       >
@@ -120,11 +120,9 @@ export function GameTile({
       <div className="flex items-center justify-between px-1 pt-3">
         <div>
           <h3 className="text-sm font-semibold">{title}</h3>
-          <p className="mt-1 text-xs text-[#a5a8b8]">
-            Your library will live here
-          </p>
+          <p className="mt-1 text-xs text-muted">Your library will live here</p>
         </div>
-        <span className="grid size-9 place-items-center rounded-full bg-white/[.06] text-[#d6caff]">
+        <span className="grid size-9 place-items-center rounded-full bg-surface-raised text-accent">
           ↗
         </span>
       </div>

@@ -11,9 +11,9 @@ The phases are ordered by dependency. Do not start a phase's dependent implement
 
 ## Phase 2 — Accounts, PostgreSQL, and RLS
 
-- Configure Supabase Auth with invite-only access for the initial small cohort, verified sessions, route protection, and account recovery flow.
-- Review and apply the schema; library rows, `is_favorite`, and game metadata are owner-scoped and available to the same account on all devices.
-- Acceptance: automated two-user tests prove one user cannot read or mutate another user's profile, game, favorite, upload session, or save metadata. No service-role credential reaches client bundles.
+- Local implementation: email/password and Google OAuth PKCE flows, invitation password setup, recovery, cookie-backed sessions, verified invitation authorization, protected account shell, invitation-gated RLS migration, and 48 pgTAP assertions are present. Google provider credentials and a development Supabase project are not configured; the migration remains unapplied and live auth/RLS checks are pending.
+- Configure Supabase Auth for the invited cohort, verify redirect/email templates, then apply the reviewed schema to an explicitly selected development project. Library rows and favorites are account-scoped and therefore shared across devices using the same account.
+- Acceptance: run the 48 pgTAP assertions and pass two-user isolation tests against a configured development project; verify invite, email login, Google sign-in/linking, logout, recovery, and protected-route callbacks in desktop and iPhone Safari; confirm no service-role or Google client secret reaches client bundles. Live acceptance remains pending until those external checks have evidence.
 
 ## Phase 3 — Private R2 library
 

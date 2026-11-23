@@ -1,4 +1,4 @@
--- PocketArcade metadata foundation (proposal only; not yet applied).
+-- PocketArcade Phase 2 schema (reviewed local migration; not yet applied).
 -- Game and save bytes belong in private Cloudflare R2, never in PostgreSQL.
 
 create extension if not exists pgcrypto;
@@ -78,29 +78,80 @@ alter table public.games enable row level security;
 alter table public.upload_sessions enable row level security;
 alter table public.saves enable row level security;
 
+-- Admin-created invitations are the server-trusted authorization marker.
+-- This field is maintained by Supabase Auth, not user-editable metadata.
+create or replace function public.is_invited_pixzer_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from auth.users as invited_user
+    where invited_user.id = (select auth.uid())
+      and invited_user.invited_at is not null
+  );
+$$;
+
+revoke all on function public.is_invited_pixzer_user() from public, anon, authenticated;
+grant execute on function public.is_invited_pixzer_user() to authenticated;
+
 drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile" on public.profiles
-  for select to authenticated using ((select auth.uid()) = id);
+  for select to authenticated using (
+    (select auth.uid()) = id and (select public.is_invited_pixzer_user())
+  );
 drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles
-  for update to authenticated using ((select auth.uid()) = id)
-  with check ((select auth.uid()) = id);
+  for update to authenticated using (
+    (select auth.uid()) = id and (select public.is_invited_pixzer_user())
+  )
+  with check (
+    (select auth.uid()) = id and (select public.is_invited_pixzer_user())
+  );
 
 drop policy if exists "Users can read own games" on public.games;
 create policy "Users can read own games" on public.games
-  for select to authenticated using ((select auth.uid()) = user_id);
--- Game creation, object mutation, and deletion are server-mediated so R2 and quota
--- operations can be coordinated. No direct authenticated insert/update/delete policy.
+  for select to authenticated using (
+    (select auth.uid()) = user_id and (select public.is_invited_pixzer_user())
+  );
+drop policy if exists "Users can update own game favorite" on public.games;
+create policy "Users can update own game favorite" on public.games
+  for update to authenticated using (
+    (select auth.uid()) = user_id and (select public.is_invited_pixzer_user())
+  )
+  with check (
+    (select auth.uid()) = user_id and (select public.is_invited_pixzer_user())
+  );
+-- Column grants below restrict this policy to is_favorite only. Game creation,
+-- object mutation, and deletion are server-mediated with R2/quota coordination.
 
 drop policy if exists "Users can read own upload sessions" on public.upload_sessions;
 create policy "Users can read own upload sessions" on public.upload_sessions
-  for select to authenticated using ((select auth.uid()) = user_id);
+  for select to authenticated using (
+    (select auth.uid()) = user_id and (select public.is_invited_pixzer_user())
+  );
 -- Upload state transitions are server-only; clients cannot mint keys or complete uploads.
 
 drop policy if exists "Users can read own saves" on public.saves;
 create policy "Users can read own saves" on public.saves
-  for select to authenticated using ((select auth.uid()) = user_id);
+  for select to authenticated using (
+    (select auth.uid()) = user_id and (select public.is_invited_pixzer_user())
+  );
 -- Save metadata writes are server-mediated; verify ownership before signing R2 access.
 
--- Table grants should be explicitly reviewed in Supabase before enabling client access.
+-- RLS is not a substitute for SQL privileges. Start from no client access and
+-- grant only the intended operations; no anonymous access is needed.
+revoke all privileges on table public.profiles, public.games,
+  public.upload_sessions, public.saves from public, anon, authenticated;
+
+grant select on table public.profiles, public.games,
+  public.upload_sessions, public.saves to authenticated;
+grant update (display_name) on table public.profiles to authenticated;
+grant update (is_favorite) on table public.games to authenticated;
+
+-- No auth.users profile trigger is installed in this phase. Provisioning is
+-- intentionally deferred until an invite lifecycle is selected and reviewed.
 -- Do not grant service_role or expose its key in browser bundles.
