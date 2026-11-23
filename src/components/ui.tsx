@@ -5,21 +5,21 @@ export function Brand() {
   return (
     <span className="inline-flex shrink-0 items-center">
       <Image
-        src="/brand/pixzer-horizontal.png"
-        alt="pixzer"
-        width={764}
-        height={268}
-        sizes="(max-width: 640px) 114px, 159px"
-        className="brand-logo brand-logo--light h-10 w-auto max-w-full object-contain sm:h-14"
+        src="/brand/pixzer-logo-tv-vacia-negro.png"
+        alt="pixzer — Your Games Anywhere."
+        width={1040}
+        height={422}
+        sizes="(max-width: 639px) 108px, 157px"
+        className="brand-logo brand-logo--light h-11 w-auto max-w-full object-contain sm:h-16"
         preload
       />
       <Image
-        src="/brand/pixzer-horizontal-dark.png"
-        alt="pixzer"
-        width={764}
-        height={268}
-        sizes="(max-width: 640px) 114px, 159px"
-        className="brand-logo brand-logo--dark h-10 w-auto max-w-full object-contain sm:h-14"
+        src="/brand/pixzer-logo-tv-vacia-blanco.png"
+        alt="pixzer — Your Games Anywhere."
+        width={1040}
+        height={422}
+        sizes="(max-width: 639px) 108px, 157px"
+        className="brand-logo brand-logo--dark h-11 w-auto max-w-full object-contain sm:h-16"
         preload
       />
     </span>

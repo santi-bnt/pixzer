@@ -1,14 +1,11 @@
 const CACHE_PREFIX = "pixzer-public-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const OFFLINE_PAGE = "/offline.html";
 
 const PUBLIC_ASSETS = [
   OFFLINE_PAGE,
-  "/brand/pixzer-horizontal.png",
-  "/brand/pixzer-horizontal-dark.png",
-  "/brand/pixzer-mark-512.png",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+  "/brand/pixzer-logo-tv-vacia-negro.png",
+  "/brand/pixzer-logo-tv-vacia-blanco.png",
 ];
 
 self.addEventListener("install", (event) => {

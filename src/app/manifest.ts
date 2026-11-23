@@ -11,13 +11,13 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#d71920",
     icons: [
       {
-        src: "/icons/icon-192.png",
-        sizes: "192x192",
+        src: "/brand/pixzer-logo-tv-vacia-negro.png",
+        sizes: "1040x422",
         type: "image/png",
       },
       {
-        src: "/icons/icon-512.png",
-        sizes: "512x512",
+        src: "/brand/pixzer-logo-tv-vacia-blanco.png",
+        sizes: "1040x422",
         type: "image/png",
       },
     ],

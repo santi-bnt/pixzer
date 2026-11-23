@@ -12,7 +12,11 @@ function createWorker({
   fetchImpl = async () => new Response("network"),
 } = {}) {
   const listeners = new Map();
-  const cacheNames = ["pixzer-public-shell-v0", "unrelated-cache"];
+  const cacheNames = [
+    "pixzer-public-shell-v0",
+    "pixzer-public-shell-v1",
+    "unrelated-cache",
+  ];
   const cacheContents = new Map();
   const addedUrls = [];
   const putUrls = [];
@@ -37,7 +41,7 @@ function createWorker({
       return cache;
     },
     async keys() {
-      return [...cacheNames, "pixzer-public-shell-v1"];
+      return [...cacheNames, "pixzer-public-shell-v2"];
     },
     async delete(name) {
       deletedNames.push(name);
@@ -100,11 +104,8 @@ test("install precaches only the generic shell and explicit public assets", asyn
 
   assert.deepEqual(worker.addedUrls, [
     "/offline.html",
-    "/brand/pixzer-horizontal.png",
-    "/brand/pixzer-horizontal-dark.png",
-    "/brand/pixzer-mark-512.png",
-    "/icons/icon-192.png",
-    "/icons/icon-512.png",
+    "/brand/pixzer-logo-tv-vacia-negro.png",
+    "/brand/pixzer-logo-tv-vacia-blanco.png",
   ]);
   assert.equal(
     worker.addedUrls.some((path) => /api|rom|save|auth/i.test(path)),
@@ -117,7 +118,10 @@ test("activation deletes only old pixzer-owned shell caches", async () => {
   const { waitPromise } = dispatch(worker.listeners.get("activate"), {});
   await waitPromise;
 
-  assert.deepEqual(worker.deletedNames, ["pixzer-public-shell-v0"]);
+  assert.deepEqual(worker.deletedNames, [
+    "pixzer-public-shell-v0",
+    "pixzer-public-shell-v1",
+  ]);
 });
 
 test("offline navigation falls back without storing private page HTML", async () => {
@@ -166,7 +170,7 @@ test("private, API, external, query-bearing, and non-GET requests are not cached
       mode: "cors",
     },
     {
-      url: "https://pixzer.test/icons/icon-192.png?user=private",
+      url: "https://pixzer.test/private/icon.png?user=private",
       method: "GET",
       mode: "cors",
     },

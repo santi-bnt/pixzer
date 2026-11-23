@@ -34,19 +34,23 @@
         width: min(100%, 34rem);
       }
 
-      .brand {
-        font-size: 1.5rem;
-        font-weight: 700;
-        letter-spacing: -0.04em;
+      .brand-logo {
+        display: block;
+        width: min(100%, 20rem);
+        height: auto;
       }
 
-      .accent {
-        color: #d71920;
+      .brand-logo-dark {
+        display: none;
       }
 
       @media (prefers-color-scheme: dark) {
-        .accent {
-          color: #ff4545;
+        .brand-logo-light {
+          display: none;
+        }
+
+        .brand-logo-dark {
+          display: block;
         }
       }
 
@@ -96,7 +100,16 @@
   </head>
   <body>
     <main>
-      <div class="brand">pix<span class="accent">zer</span></div>
+      <img
+        class="brand-logo brand-logo-light"
+        src="/brand/pixzer-logo-tv-vacia-negro.png"
+        alt="pixzer — Your Games Anywhere."
+      />
+      <img
+        class="brand-logo brand-logo-dark"
+        src="/brand/pixzer-logo-tv-vacia-blanco.png"
+        alt="pixzer — Your Games Anywhere."
+      />
       <h1>You’re offline.</h1>
       <p>
         This page needs an internet connection. Previously downloaded games will

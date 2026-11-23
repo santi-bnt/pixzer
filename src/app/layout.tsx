@@ -7,6 +7,36 @@ export const metadata: Metadata = {
   title: "pixzer — Your games, close at hand",
   applicationName: "pixzer",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      {
+        url: "/brand/pixzer-logo-tv-vacia-negro.png",
+        type: "image/png",
+        sizes: "1040x422",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/brand/pixzer-logo-tv-vacia-blanco.png",
+        type: "image/png",
+        sizes: "1040x422",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
+    apple: [
+      {
+        url: "/brand/pixzer-logo-tv-vacia-negro.png",
+        type: "image/png",
+        sizes: "1040x422",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/brand/pixzer-logo-tv-vacia-blanco.png",
+        type: "image/png",
+        sizes: "1040x422",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
+  },
   description:
     "A private library for playing your legally obtained retro games in the browser.",
 };
