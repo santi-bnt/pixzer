@@ -12,7 +12,7 @@ const systems = [
 
 export default function HomePage() {
   return (
-    <main className="grid-glow min-h-screen overflow-hidden">
+    <main className="hero-glow min-h-screen overflow-hidden">
       <header className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-6 sm:px-6">
         <Link href="/" aria-label="pixzer home">
           <span className="sm:hidden">

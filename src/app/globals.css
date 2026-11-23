@@ -136,16 +136,13 @@ select {
   color: var(--success);
 }
 
-.grid-glow {
+.hero-glow {
   background-color: var(--background);
-  background-image:
-    radial-gradient(ellipse at 65% 15%, var(--accent-soft), transparent 44%),
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size:
-    auto,
-    42px 42px,
-    42px 42px;
+  background-image: radial-gradient(
+    ellipse at 65% 15%,
+    var(--accent-soft),
+    transparent 44%
+  );
 }
 
 .panel {
