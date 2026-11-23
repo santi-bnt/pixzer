@@ -1,11 +1,19 @@
 import type { ReactNode } from "react";
 
-export function Brand({ compact = false }: { compact?: boolean }) {
+export function Brand({
+  compact = false,
+  prominent = false,
+}: {
+  compact?: boolean;
+  prominent?: boolean;
+}) {
   return (
     <span
-      className={`flex items-center gap-3 font-semibold tracking-tight ${compact ? "text-xl" : "text-2xl"}`}
+      className={`flex items-center font-semibold tracking-tight ${prominent ? "gap-2 text-[1.375rem] sm:gap-3 sm:text-[1.875rem]" : "gap-3"} ${prominent ? "" : compact ? "text-xl" : "text-2xl"}`}
     >
-      <span className="grid size-9 place-items-center rounded-xl bg-accent text-lg text-[var(--accent-contrast)] shadow-[0_6px_24px_var(--accent-soft)]">
+      <span
+        className={`grid place-items-center rounded-xl bg-accent text-[var(--accent-contrast)] shadow-[0_6px_24px_var(--accent-soft)] ${prominent ? "size-10 text-lg sm:size-[3.125rem] sm:text-2xl" : "size-9 text-lg"}`}
+      >
         ◈
       </span>
       <span>

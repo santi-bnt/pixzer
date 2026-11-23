@@ -13,16 +13,16 @@ const systems = [
 export default function HomePage() {
   return (
     <main className="hero-glow min-h-screen overflow-hidden">
-      <header className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-6 sm:px-6">
+      <header className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-4 sm:gap-3 sm:px-6 sm:py-5">
         <Link href="/" aria-label="pixzer home">
           <span className="sm:hidden">
-            <Brand compact />
+            <Brand compact prominent />
           </span>
           <span className="hidden sm:inline-flex">
-            <Brand />
+            <Brand prominent />
           </span>
         </Link>
-        <nav className="flex items-center gap-2 sm:gap-5">
+        <nav className="flex items-center gap-1 sm:gap-5">
           <AppearanceSelect compact />
           <a
             className="quiet-link hidden text-sm sm:inline"
