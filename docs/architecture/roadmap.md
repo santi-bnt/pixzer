@@ -32,22 +32,29 @@ The phases are ordered by dependency. Do not start a phase's dependent implement
 - Decide and document BIOS/firmware behavior without bundling proprietary files.
 - Acceptance: separate licensed homebrew test evidence for DS and N64, browser/device matrix, DS two-screen/touch result, N64 analog calibration result, audio/performance results, and teardown/save checks. EmulatorJS's listed cores alone do not pass acceptance.
 
-## Phase 6 — Saves and shared account state
+## Phase 6 — Offline local foundation
 
-- Implement IndexedDB local persistence, private cloud save objects, versioned metadata, outbox/retry, import/export, conflict resolution, and cross-device fetch for the same authenticated account.
-- Keep shared favorites/game metadata account-owned. Keep input/touch geometry device-local by default, with optional export/import.
-- Gate restore by user, game checksum, console, artifact kind, save schema, and core/build compatibility. Battery saves are not assumed portable; save states require exact tested compatibility.
-- Acceptance: tests prove PC-originated compatible battery saves can be retrieved and restored in a second client, conflicts retain both versions, and incompatible states cannot be silently restored. Record compatible console/core pairs.
+- **Foundation implemented in this update:** account-partitioned IndexedDB records for ROM blobs and immutable save versions/heads/outbox; atomic save/head/outbox commits; byte-level streaming SHA-256 checks; storage estimate/persistence helpers; quota/blocked/abort error handling; bounded sync coordinator over an injected transport; versioned public-only Service Worker shell and offline fallback.
+- **Still required:** integrate identity-derived offline account selection, explicit resumable R2 downloads with progress/cancel/recovery, native-browser persistence tests, emulator save adapters, real cloud transport, and offline-ready/sync UI. The current repository does not expose a working ROM download or game session.
+- This foundation can be developed in parallel with Phase 2 review. Actual game downloads require Phase 3's private R2 download API; playable offline sessions require a compatible emulator from Phases 4 or 5. No offline-ready UI is allowed before those operations work end to end.
+- Acceptance: account partitions never expose another user’s records; checksum mismatch/interruption does not replace a verified ROM; local saves survive reload and do not wait on network; worker tests prove that authenticated HTML, API responses, signed URLs, ROMs, and saves never enter Cache Storage; quota and transaction-abort paths are covered.
 
-## Phase 7 — iPhone Safari and installed-PWA mode
+## Phase 7 — Private cloud save synchronization and conflicts
+
+- Implement only after Phase 2 authorization/RLS is validated, Phase 3 provides private R2 operations, and the relevant emulator exposes a verified save adapter.
+- Upload immutable save versions with server-derived ownership, per-operation idempotency, expected-parent revision checks, server-verified checksum/size, bounded exponential retry, and no reliance on `navigator.onLine` as reachability proof.
+- Preserve both local and remote versions on conflict; provide explicit choose/export actions. Never merge binary files or silently overwrite a head. Keep local copies after sync.
+- Acceptance: verified account can upload and retrieve a compatible save on another device; retries are idempotent and bounded; expired auth is rejected for remote work; simulated upload failure leaves recoverable local data; two independent clients preserve both conflicting versions.
+
+## Phase 8 — iPhone Safari and installed-PWA mode, including offline validation
 
 - Add virtual D-pad, A/B/Start/Select/L/R, N64 analog/C controls, multi-touch pointer tracking, adjustable size/position/opacity, responsive portrait/landscape layouts, DS lower-screen touch, safe-area support, and explicit PC/iPhone manual mode switch.
 - Recommend the touch-first layout using capabilities (touch points, coarse/fine pointer, connected gamepad, fullscreen/PWA availability); never depend solely on user-agent strings. Feature-detect Bluetooth controller exposure, interactive fullscreen, orientation behavior, audio, and storage.
-- Apply scroll/selection/context-menu suppression only within active game controls. Use PWA standalone/fullscreen manifest behavior as an optional installation path; provide fallbacks for Safari tab restrictions.
-- Acceptance: test current physical iPhone Safari and Home Screen-installed PWA separately, portrait and landscape, for each claimed console. Record gameplay, touch latency/multi-touch, safe-area/home-indicator occlusion, audio, controller availability, IndexedDB persistence after relaunch, cloud save restore, frame pacing, and memory.
-- Full iPhone compatibility remains blocked until real gameplay, input, audio, persistence, and performance all pass on recorded devices. A responsive screenshot is insufficient.
+- Apply scroll/selection/context-menu suppression only within active game controls. Do not rely on Background Sync in iOS; resume sync only when the app is opened or becomes active and a real server request succeeds.
+- Acceptance: test current physical iPhone Safari and Home Screen-installed PWA separately in portrait/landscape, including offline reload, cached game launch, local save/restore, app suspension/reopen, explicit account/logout behavior, sync retry, safe areas, touch latency, audio, controllers, frame pacing, and memory. Record a separate result for every claimed console.
+- Full iPhone offline compatibility remains unclaimed until real gameplay and persistence pass on recorded physical devices. DS/N64 performance must be validated independently.
 
-## Phase 8 — Security, operations, and authorized deployment
+## Phase 9 — Security, operations, and authorized deployment
 
 - Complete security review, dependency/license inventory, account deletion, storage reconciliation alerts, backup/recovery procedure, rate limits, monitoring, and CI expansion.
 - Acceptance: end-to-end browser → authenticated API → RLS/R2 → response flows pass; deployment checklist and provider costs are reviewed; Vercel deployment occurs only after authorization.

@@ -11,6 +11,14 @@
 - Treat a signed URL as a bearer capability. Do not log it, put it in analytics, persist it in the database, or expose it to another account.
 - Track object lifecycle and quota in metadata; reconcile metadata against R2 periodically because the database and object store do not share a transaction.
 
+## Explicit offline copies
+
+When R2 downloads exist, **Available Offline** is an explicit per-game action. A verified download is stored in IndexedDB as a ROM `Blob` plus immutable game ID, owner UUID, console, expected byte length, SHA-256 and verification timestamp. It is never placed in Cache Storage. A completed verified copy replaces an earlier version atomically; an interrupted or checksum-mismatched download cannot overwrite the last good copy. Progress/cancellation is local download state and must not be presented as complete before verification.
+
+Every local library query is scoped to the currently active Supabase user UUID. This is an application-level partition only: browser-managed storage is not encrypted or isolated from other code/users sharing the same OS/browser profile. On account switch, only the newly verified user's partition is visible; logout clears the active local account selector while preserving cached records for that owner. Offline access must fail closed if no matching local account identity exists. A stale/expired token may never authorize an R2 URL or any remote operation.
+
+Browser storage is quota-managed and may be evicted. Check `navigator.storage.estimate()` and request `navigator.storage.persist()` where supported; handle denied persistence, `QuotaExceededError`, interruption, and private browsing. Never prefetch the full library. See the [offline-first architecture](offline-first.md) for schema, worker allowlist, sync, and recovery rules.
+
 ## Quota and operating budget
 
 The initial product limit is **900 MB per user**, with roughly ten invited users. Ten full quotas use 9,000 MB, leaving about 1,000 MB against a 10 GB-month Standard storage allowance for shared operational headroom. This is a planning ceiling, not a guarantee: define MB/GB consistently in code (recommend decimal bytes), account for pending uploads and retained saves, and enforce both per-user and global limits. Do not issue upload capabilities if projected committed plus reserved bytes exceed the global budget. A full allowance from every user is possible and would exhaust most of the free storage tier.

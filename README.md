@@ -8,6 +8,8 @@ Phase 1 provides the Next.js application foundation, responsive interface routes
 
 The interface supports Light, Dark, and System appearance with white/red and black/red palettes. Choices persist on the device and synchronize through authenticated Supabase user metadata when a configured session is available. Account sync has not yet been verified against a live project. Theme changes are presentation-only and do not alter player input or game state.
 
+Offline-first foundations now include account-partitioned IndexedDB storage for game/save records, byte-level SHA-256 checks, a bounded local-first sync coordinator interface, and a public-only offline Service Worker shell. They are not connected to private ROM downloads, authenticated account selection, an emulator save adapter, a real cloud transport, or disconnected gameplay. Do not interpret local browser storage as encrypted or rely on it as account-level security.
+
 Preferred deployment domain: `pixzer.vercel.app` (DNS resolves and HTTPS returned 200 from Vercel during this check; ownership and availability for this project are unverified).
 
 | System                               | Planned extension     | Current status                                    |
@@ -27,7 +29,7 @@ The iPhone mode is planned for Safari and Home Screen-installed web apps, with i
 - Next.js App Router, React, TypeScript strict mode, Tailwind CSS
 - Supabase Auth, PostgreSQL, Row Level Security (Phase 2 local integration; hosted project not configured)
 - Cloudflare R2 Standard private object storage (planned)
-- EmulatorJS/WebAssembly candidate; IndexedDB save cache (planned)
+- EmulatorJS/WebAssembly candidate; IndexedDB offline storage and save sync are planned and not integrated
 - Vercel deployment target (not configured)
 
 ## Local development
@@ -55,20 +57,23 @@ Copy `.env.example` to `.env.local` only when configuring integrations. Phase 2 
 
 ## Architecture and security
 
-Read [system architecture](docs/architecture/system.md), [roadmap and acceptance gates](docs/architecture/roadmap.md), [database proposal](docs/architecture/database.md), [private storage flow](docs/architecture/storage.md), [PC/iPhone player and emulator design](docs/architecture/emulation.md), [save strategy](docs/architecture/saves.md), [free-tier estimates](docs/architecture/free-tiers.md), and [security/quality plan](docs/architecture/quality.md). The initial SQL file is a proposal and has not been applied. Private objects must be accessed through authenticated, short-lived server-issued URLs. The server derives ownership from a validated session, enforces quotas, and reconciles storage metadata. No public bucket is permitted for user content.
+Read [system architecture](docs/architecture/system.md), [offline-first architecture](docs/architecture/offline-first.md), [offline agent board](docs/agents/offline-first-board.md), [roadmap and acceptance gates](docs/architecture/roadmap.md), [database proposal](docs/architecture/database.md), [private storage flow](docs/architecture/storage.md), [PC/iPhone player and emulator design](docs/architecture/emulation.md), [save strategy](docs/architecture/saves.md), [free-tier estimates](docs/architecture/free-tiers.md), and [security/quality plan](docs/architecture/quality.md). The initial SQL file is a proposal and has not been applied. Private objects must be accessed through authenticated, short-lived server-issued URLs. The server derives ownership from a validated session, enforces quotas, and reconciles storage metadata. No public bucket is permitted for user content.
 
 The initial planning ceiling is 900 MB per account for roughly ten invited users, reserving capacity against a nominal R2 Standard 10 GB-month free storage allowance. This is a planning target, not a promise of zero cost; request/operation counts, retained copies, other provider usage, and future pricing can affect cost. Confirm current provider terms and configure usage monitoring before launch.
 
 ## Roadmap
 
 1. **Phase 1:** architecture, repository, design system, foundation, shared player/input contracts (complete).
-2. **Phase 2:** Supabase Auth, PostgreSQL migrations, sessions, and RLS (in progress).
-3. **Phase 3:** R2 private uploads, library persistence, quotas, recovery, and deletion.
-4. **Phase 4:** GB/GBC/GBA PC emulation, keyboard/gamepad adapters, remapping, fullscreen where supported, and per-console/browser validation.
-5. **Phase 5:** Nintendo DS and Nintendo 64 PC integration; per-console input profiles, N64 analog controls, and desktop controller tests.
-6. **Phase 6:** IndexedDB and private cloud saves, compatibility-gated PC↔iPhone continuation, conflict resolution, and shared account metadata/favorites.
-7. **Phase 7:** iPhone Safari and installed-PWA player mode: virtual multi-touch controls, configurable layout, safe areas, portrait/landscape and DS touch screen.
-8. **Phase 8:** security hardening, cross-device/browser/device tests, CI expansion, and authorized Vercel deployment.
+2. **Phase 2:** Supabase Auth, PostgreSQL migrations, sessions, and RLS (local code implemented; hosted acceptance pending).
+3. **Phase 3:** private R2 uploads/downloads, library persistence, quotas, recovery, and deletion.
+4. **Phase 4:** GB/GBC/GBA PC emulation, keyboard/gamepad adapters, remapping, and per-console/browser validation.
+5. **Phase 5:** Nintendo DS and Nintendo 64 PC integration, controller profiles, analog controls, and validation.
+6. **Phase 6:** account-partitioned IndexedDB, explicit offline copies, local save/outbox transactions, storage recovery, and public-only offline shell. Actual offline game launch depends on Phases 3–5.
+7. **Phase 7:** private cloud save transport, bounded retry, cross-device restore, and explicit conflict resolution after save adapters and R2 APIs are validated.
+8. **Phase 8:** iPhone Safari and installed-PWA controls, layout, and physical-device/offline testing.
+9. **Phase 9:** security hardening, operations, CI, and authorized Vercel release.
+
+Offline gameplay and cloud save synchronization remain unclaimed until their complete browser/device flows pass acceptance tests.
 
 ## GitHub
 

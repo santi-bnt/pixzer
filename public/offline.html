@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#ffffff" />
+    <title>pixzer — Offline</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #fff;
+        color: #1d1d1f;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          background: #101014;
+          color: #fff;
+        }
+      }
+
+      body {
+        box-sizing: border-box;
+        display: grid;
+        min-height: 100svh;
+        margin: 0;
+        padding: max(2rem, env(safe-area-inset-top)) 1.5rem
+          max(2rem, env(safe-area-inset-bottom));
+        place-items: center;
+      }
+
+      main {
+        width: min(100%, 34rem);
+      }
+
+      .brand {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.04em;
+      }
+
+      .accent {
+        color: #d71920;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .accent {
+          color: #ff4545;
+        }
+      }
+
+      h1 {
+        margin: 3rem 0 0.75rem;
+        font-size: clamp(2rem, 8vw, 3.25rem);
+        letter-spacing: -0.05em;
+      }
+
+      p {
+        color: #6e6e73;
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        p {
+          color: #a1a1aa;
+        }
+      }
+
+      a {
+        display: inline-flex;
+        min-height: 2.75rem;
+        margin-top: 1rem;
+        align-items: center;
+        border-radius: 0.75rem;
+        background: #d71920;
+        padding: 0 1rem;
+        color: white;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        a {
+          background: #ff4545;
+          color: #101014;
+        }
+      }
+
+      a:focus-visible {
+        outline: 3px solid currentColor;
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">pix<span class="accent">zer</span></div>
+      <h1>You’re offline.</h1>
+      <p>
+        This page needs an internet connection. Previously downloaded games will
+        be available here only after offline game support is implemented.
+      </p>
+      <a href="/">Try again</a>
+    </main>
+  </body>
+</html>

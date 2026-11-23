@@ -21,6 +21,9 @@ Build pixzer, a private, account-based library for users to play games they are 
 - Preserve Supabase's verified identity linking. Do not write custom email-based account merges. Same verified provider email may link to an existing invited Auth user while retaining its user ID; mismatched or unverified emails must never be merged by application code.
 - Resolve System from `prefers-color-scheme` and apply the saved/effective theme before first paint. Theme changes are immediate and do not reload the page; transitions respect `prefers-reduced-motion`. The player canvas and input overlays must remain independently styled so theme changes cannot alter game rendering, input focus, keyboard/gamepad handling, or touch hit areas.
 - A cross-device save is usable only when the game identity and save format/core compatibility checks pass. Battery saves and core-specific states remain distinct.
+- Offline ROMs and saves belong in account-partitioned IndexedDB, never shared Cache Storage. That partition is not encryption or OS-level isolation; clear the active offline account selector on logout and switch partitions only after verified online account changes.
+- Service Workers may cache only public static assets and a generic offline fallback. Never cache authenticated pages, API responses, Supabase data, R2 signed URLs, ROMs, or saves. A cached/expired identity cannot authorize remote operations; retry sync only after fresh server verification.
+- Save locally before attempting cloud sync. Persist immutable save versions and a retry operation atomically; preserve both branches on conflicts and never silently merge binary saves.
 - Treat the 900 MB per-user quota and shared reserve as enforced limits, not UI hints. Recheck current provider pricing before launch.
 
 ## Coding conventions
@@ -40,6 +43,7 @@ Build pixzer, a private, account-based library for users to play games they are 
 - Emulator support requires test-ROM execution on each claimed system and recorded target browser/device results.
 - PC input requires keyboard remap tests, supported controller hot-plug tests, analog dead-zone tests for N64, and fullscreen feature-detection tests.
 - iPhone mode requires actual iPhone Safari and installed-PWA testing in portrait/landscape, safe-area and home-indicator checks, simultaneous multi-touch, scroll/selection suppression limited to the controls, controller capability checks, audio, IndexedDB persistence, and performance.
+- Offline acceptance requires disconnected reload/launch/save/reopen, quota and eviction behavior, durable retry and conflict tests, account switching/logout isolation, and separate physical iPhone Safari/PWA runs. Do not promise iOS Background Sync.
 - Theme QA covers all routes and shared UI states in Light, Dark, and System; local preference persistence before authentication; live system appearance changes; no incorrect-theme flash on reload; contrast, focus, and reduced-motion behavior; and no gameplay/input impact on desktop or iPhone layouts.
 - Never claim full iPhone compatibility until real gameplay, input, audio, persistence, and performance pass on recorded device/browser versions.
 - Database migrations must be reviewed for ownership, constraints, and RLS. Never treat a proposal as applied.

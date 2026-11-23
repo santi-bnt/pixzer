@@ -1,16 +1,16 @@
-# Save persistence and synchronization (Phase 1 proposal)
+# Save persistence and synchronization
 
 ## Status and guarantees
 
-No save system is implemented in Phase 1. The proposal separates in-game battery saves (portable in some cases) from emulator save states (usually tied to the exact core and build). A save must never be reported as synced until the durable cloud write is confirmed.
+No emulator save adapter, R2 save storage, or concrete sync transport is implemented yet. The offline foundation now provides an IndexedDB repository for immutable local save versions, heads, and outbox operations, plus a tested coordinator that depends on an injected future transport. The design separates in-game battery saves (portable in some cases) from emulator save states (usually tied to the exact core and build). A save must never be reported as synced until the durable cloud write is confirmed.
 
 ## Data layers
 
 1. **Emulator memory:** the current core's in-memory state; lost on crash or tab termination.
 2. **Local browser persistence:** IndexedDB stores per-game save records and optional import/export artifacts. Browser storage can be evicted, cleared, or unavailable; it is a recovery cache, not the only durable copy. Ask for persistent storage where supported, but do not promise it.
-3. **Cloud save objects (later phase):** private R2 binary objects with PostgreSQL metadata and ownership policy. Sync is a Phase 6 capability after Auth, RLS, object signing, and upload flows exist. PC and iPhone use the same account and save heads; a save only appears as resumable on the other device after the compatibility gate passes.
+3. **Cloud save objects (later phase):** private R2 binary objects with PostgreSQL metadata and ownership policy. Sync follows Auth/RLS validation, save upload/download endpoints and verified game ownership. PC and iPhone use the same account and save heads; a save only appears as resumable on the other device after the compatibility gate passes.
 
-Use IndexedDB over localStorage because saves are binary and can exceed small synchronous key/value limits. Suggested stores:
+Use IndexedDB over localStorage because saves are binary and can exceed small synchronous key/value limits. The typed contract proposes these stores:
 
 - `saveBlobs`: key `[userId, gameId, kind, slotId]`; bytes as `Blob`/`ArrayBuffer`.
 - `saveHeads`: key `[userId, gameId, kind, slotId]`; schema version, monotonic local revision, checksum, core identity for states, updated timestamp, sync state (`local | pending | synced | conflict | error`).
@@ -32,7 +32,7 @@ Never overwrite a different ROM's save because display titles match. Same-game i
 - Validate size, expected format, game checksum match where available, and schema before import. Never auto-import a mismatched or untrusted state into the running core.
 - Browser tab close, device shutdown, private mode, storage eviction, and browser quota exhaustion can still lose unsynced data; explain pending state to users.
 
-## Cloud sync and conflict rules (Phase 6)
+## Cloud sync and conflict rules (planned after offline-local persistence)
 
 Treat saves as immutable versions. Metadata records a current head revision plus parent revision and checksum. Server authorization derives the owner from the verified session; clients never choose owner IDs. For uploads, require an expected parent revision and idempotency key. The server commits metadata only after object upload verification, and garbage-collects abandoned objects after a grace period.
 
