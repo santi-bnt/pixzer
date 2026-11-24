@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="422" height="422" viewBox="0 0 375 422">
+  <style>
+    .light-logo { display: block; }
+    .dark-logo { display: none; }
+    .background { fill: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      .light-logo { display: none; }
+      .dark-logo { display: block; }
+      .background { fill: #111114; }
+    }
+  </style>
+  <rect class="background" width="422" height="422" rx="92" />
+  <image class="light-logo" href="/brand/pixzer-logo-tv-vacia-negro.png" x="0" y="0" width="1040" height="422" />
+  <image class="dark-logo" href="/brand/pixzer-logo-tv-vacia-blanco.png" x="0" y="0" width="1040" height="422" />
+</svg>
