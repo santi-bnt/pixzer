@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import { startGoogleOAuthAction } from "@/lib/supabase/actions";
+import {
+  signInWithPasswordAction,
+  startGoogleOAuthAction,
+  type PasswordSignInState,
+} from "@/lib/supabase/actions";
 import { safeNextPath } from "@/features/auth/safe-next";
 import {
   getOAuthErrorMessage,
@@ -57,39 +59,19 @@ export function LoginForm({
   nextPath: string;
   oauthError?: OAuthErrorCode;
 }) {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setPending(true);
-
-    try {
-      const supabase = createClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
-      if (signInError) {
-        setError(
-          "We couldnâ€™t sign you in. Check your email and password, then try again.",
-        );
-        setPending(false);
-        return;
-      }
-
-      router.replace(safeNextPath(nextPath));
-      router.refresh();
-    } catch {
-      setError("Sign-in is temporarily unavailable. Please try again later.");
-      setPending(false);
-    }
-  }
+  const initialState: PasswordSignInState = { error: null };
+  const [state, passwordAction, pending] = useActionState(
+    signInWithPasswordAction,
+    initialState,
+  );
+  const passwordMessages = {
+    "invalid-credentials":
+      "We couldn’t sign you in. Check your email and password, then try again.",
+    "invite-required":
+      "This account does not have pixzer access. Sign in with an invited account or contact your administrator.",
+    unavailable: "Sign-in is temporarily unavailable. Please try again later.",
+  };
+  const passwordError = state.error ? passwordMessages[state.error] : null;
 
   return (
     <div className="mt-7">
@@ -117,7 +99,8 @@ export function LoginForm({
         <span aria-hidden="true" className="h-px flex-1 bg-token" />
       </div>
 
-      <form className="space-y-4" onSubmit={handleSubmit}>
+      <form action={passwordAction} className="space-y-4">
+        <input name="next" type="hidden" value={safeNextPath(nextPath)} />
         <label className="block text-sm text-text" htmlFor="login-email">
           Email address
           <input
@@ -125,11 +108,9 @@ export function LoginForm({
             className="mt-2 h-12 w-full rounded-xl border border-token bg-surface-soft px-4 text-sm placeholder:text-subtle disabled:opacity-60"
             id="login-email"
             name="email"
-            onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
             required
             type="email"
-            value={email}
             disabled={pending}
           />
         </label>
@@ -140,11 +121,9 @@ export function LoginForm({
             className="mt-2 h-12 w-full rounded-xl border border-token bg-surface-soft px-4 text-sm placeholder:text-subtle disabled:opacity-60"
             id="login-password"
             name="password"
-            onChange={(event) => setPassword(event.target.value)}
             placeholder="Your password"
             required
             type="password"
-            value={password}
             disabled={pending}
           />
         </label>
@@ -156,9 +135,9 @@ export function LoginForm({
             Forgot password?
           </Link>
         </div>
-        {error && (
+        {passwordError && (
           <p aria-live="polite" className="notice-error text-sm" role="alert">
-            {error}
+            {passwordError}
           </p>
         )}
         <button
@@ -166,7 +145,7 @@ export function LoginForm({
           disabled={pending}
           type="submit"
         >
-          {pending ? "Signing inâ€¦" : "Sign in"}
+          {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
     </div>

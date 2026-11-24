@@ -2,33 +2,67 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getPasswordSignInOutcome } from "@/features/auth/fragment-flow.mjs";
+import { safeNextPath } from "@/features/auth/safe-next";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
-function safeNextPath(candidate: string | null | undefined): string {
+export type PasswordSignInError =
+  | "invalid-credentials"
+  | "invite-required"
+  | "unavailable";
+
+export type PasswordSignInState = { error: PasswordSignInError | null };
+
+export async function signInWithPasswordAction(
+  _previousState: PasswordSignInState,
+  formData: FormData,
+): Promise<PasswordSignInState> {
+  const emailValue = formData.get("email");
+  const passwordValue = formData.get("password");
   if (
-    !candidate ||
-    !candidate.startsWith("/") ||
-    candidate.startsWith("//") ||
-    candidate.includes("\\")
+    typeof emailValue !== "string" ||
+    typeof passwordValue !== "string" ||
+    !emailValue.trim() ||
+    !passwordValue
   ) {
-    return "/library";
+    return { error: "invalid-credentials" };
   }
 
+  let supabase: Awaited<ReturnType<typeof createClient>>;
+  let nextPath: string;
   try {
-    const decoded = decodeURIComponent(candidate);
-    const parsed = new URL(candidate, "https://pixzer.invalid");
-    if (
-      decoded.startsWith("//") ||
-      decoded.includes("\\") ||
-      parsed.origin !== "https://pixzer.invalid"
-    ) {
-      return "/library";
+    supabase = await createClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: emailValue.trim(),
+      password: passwordValue,
+    });
+    if (error) return { error: "invalid-credentials" };
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    const outcome = getPasswordSignInOutcome({
+      credentialsAccepted: true,
+      userVerified: !userError && Boolean(user),
+      invitedAt: user?.invited_at,
+    });
+
+    if (outcome !== "authenticated") {
+      await supabase.auth.signOut();
+      return { error: outcome };
     }
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+
+    const nextValue = formData.get("next");
+    nextPath = safeNextPath(
+      typeof nextValue === "string" ? nextValue : null,
+    );
   } catch {
-    return "/library";
+    return { error: "unavailable" };
   }
+
+  redirect(nextPath);
 }
 
 function getSafeOrigin(originHeader: string | null): string | null {

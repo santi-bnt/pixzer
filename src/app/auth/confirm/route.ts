@@ -1,40 +1,11 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSafeAuthNextPath } from "@/features/auth/fragment-flow.mjs";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 const allowedTypes = new Set<EmailOtpType>(["invite", "recovery"]);
 const oauthNextCookie = "pixzer-oauth-next";
-
-function safeNextPath(
-  candidate: string | null,
-  origin: string,
-  fallback: string,
-): string {
-  if (
-    !candidate ||
-    !candidate.startsWith("/") ||
-    candidate.startsWith("//") ||
-    candidate.includes("\\")
-  ) {
-    return fallback;
-  }
-
-  try {
-    const decoded = decodeURIComponent(candidate);
-    const parsed = new URL(candidate, origin);
-    if (
-      decoded.startsWith("//") ||
-      decoded.includes("\\") ||
-      parsed.origin !== origin
-    ) {
-      return fallback;
-    }
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return fallback;
-  }
-}
 
 function redirectTo(request: NextRequest, pathname: string) {
   const response = NextResponse.redirect(new URL(pathname, request.url));
@@ -73,7 +44,7 @@ export async function GET(request: NextRequest) {
         : url.searchParams.get("type") === "invite"
           ? "/register"
           : "/library";
-    const next = safeNextPath(
+    const next = getSafeAuthNextPath(
       url.searchParams.get("next") ??
         request.cookies.get(oauthNextCookie)?.value ??
         null,
@@ -96,7 +67,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (tokenHash && type && allowedTypes.has(type as EmailOtpType)) {
-    const next = safeNextPath(
+    const next = getSafeAuthNextPath(
       url.searchParams.get("next"),
       url.origin,
       type === "invite" ? "/register" : "/reset-password",
@@ -119,5 +90,9 @@ export async function GET(request: NextRequest) {
     return redirectTo(request, next);
   }
 
-  return redirectTo(request, "/login?error=invalid-link");
+  // Supabase's default ConfirmationURL redirects with tokens in the URL
+  // fragment. Browsers do not send that fragment to this server route; a
+  // redirect to the browser bridge preserves it without putting tokens in a
+  // query string or server log.
+  return redirectTo(request, "/auth/fragment");
 }

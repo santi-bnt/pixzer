@@ -16,7 +16,9 @@ export function createClient(): SupabaseClient {
   }
 
   browserClient = createBrowserClient(config.url, config.publishableKey, {
-    auth: { flowType: "pkce" },
+    // PKCE callbacks are exchanged by /auth/confirm. Fragment sessions from
+    // Supabase's default email templates are consumed explicitly by the bridge.
+    auth: { flowType: "pkce", detectSessionInUrl: false },
   });
 
   return browserClient;

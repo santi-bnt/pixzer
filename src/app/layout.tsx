@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "@/features/appearance/theme-provider";
+import { AuthFragmentBridge } from "@/features/auth/auth-fragment-bridge";
 import { PwaRegistration } from "@/features/offline/pwa-registration";
 import "./globals.css";
 
@@ -60,6 +61,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <AuthFragmentBridge />
         <ThemeProvider>
           {children}
           <PwaRegistration />
