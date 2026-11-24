@@ -2,17 +2,17 @@
 
 ## Status
 
-Phase 1 establishes the UI and typed service boundaries. Phase 2 adds Supabase Auth and RLS code, but no development Supabase project is configured. This offline foundation adds IndexedDB persistence and a public-only Service Worker, but they are not integrated with authenticated library selection, R2, emulator execution, or cloud saves. Offline gameplay is not claimed.
+Phase 1 established the UI and typed service boundaries. Phase 2 migrations `0001` and `0002`, the four tables, six RLS policies, and 58 pgTAP checks are verified on development project `pxxtzjpjtigikolauxwc`; real Auth flows remain pending. Local private-R2 upload/download code is now implemented behind a feature flag, but its separate migration is unapplied and no real bucket or credentials are configured. IndexedDB persistence and the public-only Service Worker are not integrated with authenticated library selection or an emulator. No gameplay is claimed.
 
 ## Runtime shape
 
 ```text
 PC browser / iPhone Safari or installed web app (planned)
   ├─ Next.js App Router UI (Vercel)
-  ├─ Supabase Auth session (planned)
-  ├─ PostgreSQL metadata + RLS (planned)
-  ├─ Short-lived signed object requests (planned)
-  │    └─ Private Cloudflare R2 bucket
+  ├─ Supabase Auth session (implemented; live provider flows pending)
+  ├─ PostgreSQL metadata + RLS (verified in development)
+  ├─ Short-lived signed object requests (local code; disabled)
+  │    └─ Private Cloudflare R2 bucket (not configured)
   ├─ Responsive shared player (planned)
   │    ├─ PC keyboard + Gamepad API input adapters
   │    └─ iPhone virtual multi-touch controls (later phase)
@@ -24,7 +24,7 @@ PC browser / iPhone Safari or installed web app (planned)
 
 The implemented Service Worker caches a generic offline fallback and allowlisted public static files only. It never caches authenticated page responses, API data, Supabase data, short-lived R2 URLs, ROMs, or saves. The IndexedDB repository supports explicitly cached ROM records and immutable local saves under user-partitioned keys. That partition prevents application-level account mix-ups but is not encryption or OS-level isolation. Account selection and logout integration are not implemented; when added, a local cached user identity may select only local records, while each remote operation still requires a fresh server-verified invited Supabase session. See [offline-first architecture](offline-first.md) and the [offline execution board](../agents/offline-first-board.md).
 
-The Next.js server is the policy enforcement point for session-bound upload intents, quota reservations, upload completion, signed downloads, and object deletion. The browser must never receive privileged database or R2 credentials. Postgres and R2 do not share transactions, so upload state is explicit and reconciliation is required.
+The Next.js server is the policy enforcement point for session-bound upload intents, proposed quota reservations, upload completion, and signed downloads. Object deletion and scheduled reconciliation are not implemented. The browser must never receive privileged database or R2 credentials. Postgres and R2 do not share transactions, so upload state is explicit and reconciliation is required.
 
 PC and iPhone use the same authenticated account and server-owned game records, including shared favorites and metadata. The player chooses PC or iPhone layout from capability signals, with a manual override; it never relies solely on user-agent strings. Keyboard/gamepad/touch adapters emit a shared input contract. Device-specific mappings and touch geometry remain local by default. Cloud saves are shared only when the ROM identity and save artifact/core compatibility checks permit restore.
 
@@ -34,8 +34,8 @@ PC and iPhone use the same authenticated account and server-owned game records, 
 - `src/components`: shared responsive shell and design primitives.
 - `src/features/offline/`: typed local game/save contracts, account-partitioned IndexedDB repository, streaming checksums, storage capability helpers, a bounded sync coordinator without a cloud transport, and production-only PWA registration.
 - `src/features`: feature-specific behavior.
-- `src/lib/supabase`: cookie-bound browser/server clients, Auth actions, callback verification, and invitation-gated session checks. `src/lib/r2`: typed contracts only; cloud storage operations are not implemented.
-- `supabase/migrations`: initial schema applied to the dedicated development project; real Auth flow validation remains pending.
+- `src/lib/supabase`: cookie-bound browser/server clients, Auth actions, callback verification, and invitation-gated session checks. `src/lib/r2`: server-only R2 signing, validation, and verification modules; these remain disabled until credentials and migration are configured.
+- `supabase/migrations`: `0001` and `0002` applied to development; `0003_private_game_uploads.sql` is proposal-only and unapplied.
 - `docs/architecture`: service flows, trust boundaries, decisions, and known limitations.
 
 ## Key decisions
@@ -57,6 +57,6 @@ PC and iPhone use the same authenticated account and server-owned game records, 
 
 ## Deployment and operations
 
-Vercel is the planned Next.js host. Supabase and Cloudflare R2 remain separate providers. Use separate development and production projects/buckets, least-privilege keys, database migrations, encrypted provider secrets, rate limits, and usage alerts. Do not configure deployment until the user authorizes it and the service projects exist. Provider free tiers are variable and do not imply a zero-cost guarantee.
+Vercel hosts the Next.js site. Supabase and Cloudflare R2 remain separate providers. Use separate development and production projects/buckets, least-privilege keys, reviewed database migrations, encrypted provider secrets, rate limits, and usage alerts. R2 is not configured. Provider free tiers are variable and do not imply a zero-cost guarantee.
 
 See [roadmap and acceptance gates](roadmap.md), [database](database.md), [storage](storage.md), [emulation and PC/iPhone modes](emulation.md), [saves](saves.md), [free-tier limits](free-tiers.md), and [quality](quality.md) for detailed designs.

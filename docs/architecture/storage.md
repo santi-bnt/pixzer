@@ -1,108 +1,56 @@
 # Private game storage and upload contract
 
-**Status:** Phase 1 design. No R2 bucket, credentials, upload endpoint, or object access is configured yet.
+**Status:** The local upload, completion, download, quota reservation, and library code is implemented behind `PIXZER_R2_UPLOADS_ENABLED=false`. `0003_private_game_uploads.sql` is proposal-only and has not been applied. No R2 bucket or real credentials are configured, so live object transfers remain unverified.
 
-## Goals and invariants
+## Security and data boundaries
 
-- Keep ROMs, saves, and any user-supplied files in a private Cloudflare R2 Standard bucket. Never enable public bucket access for user content.
-- Keep R2 credentials in server-only environment variables. The browser receives only short-lived URLs for a single object and a single operation.
-- Resolve the authenticated user on the server for every initiation, completion, download, and delete request. Ignore or reject a client-supplied owner ID.
-- Store an opaque, server-generated object key in PostgreSQL. Do not use a user filename as a key or permit a client to choose a bucket/key.
-- Treat a signed URL as a bearer capability. Do not log it, put it in analytics, persist it in the database, or expose it to another account.
-- Track object lifecycle and quota in metadata; reconcile metadata against R2 periodically because the database and object store do not share a transaction.
+- ROMs and saves belong in a private Cloudflare R2 Standard bucket. Never enable public access for user content.
+- R2 credentials and the Supabase secret key are server-only. The browser receives a short-lived capability for one object and one operation; signed URLs are bearer tokens and must never be logged, analyzed, or persisted.
+- Every operation starts from a fresh invited Supabase session. The server derives `user_id`; callers cannot choose an owner, bucket, key, quota, or database state.
+- PostgreSQL stores metadata only. Object access is authorized by an owner-scoped database lookup before the server signs a download.
+- ROM bytes stay out of PostgreSQL, Vercel request bodies, Cache Storage, and the Git repository.
 
-## Explicit offline copies
+## Implemented local flow
 
-When R2 downloads exist, **Available Offline** is an explicit per-game action. A verified download is stored in IndexedDB as a ROM `Blob` plus immutable game ID, owner UUID, console, expected byte length, SHA-256 and verification timestamp. It is never placed in Cache Storage. A completed verified copy replaces an earlier version atomically; an interrupted or checksum-mismatched download cannot overwrite the last good copy. Progress/cancellation is local download state and must not be presented as complete before verification.
+1. The upload page accepts `.gb`, `.gbc`, `.gba`, `.nds`, `.n64`, `.z64`, and `.v64`, checks the file name and size, and reports progress from XHR.
+2. An invitation-authorized same-origin POST validates the request and calls the service-role-only `reserve_game_upload` RPC. The proposed RPC serializes quota reservations with an advisory transaction lock, enforces 900,000,000 bytes per user and 9,000,000,000 bytes shared, allows at most two active reservations per account, and creates an opaque owner-prefixed object key.
+3. The server issues a 15-minute presigned PUT for the exact key, exact Content-Length, binary content type, and `If-None-Match: *`. R2 evaluates the conditional write atomically, so a replay cannot replace an existing object at that key. The browser transfers directly to R2.
+4. The completion endpoint authenticates again, checks the reservation owner and expiry, confirms R2's object size, streams the object through the Node.js function to calculate SHA-256, and calls `complete_game_upload`. A `games` row appears only after R2 and PostgreSQL both confirm the object.
+5. Library records are read using the normal cookie-bound Supabase client and RLS. Download URLs are issued only after a user-scoped row lookup and last 120 seconds. Stored games are clearly marked as not playable until an emulator is integrated.
 
-Every local library query is scoped to the currently active Supabase user UUID. This is an application-level partition only: browser-managed storage is not encrypted or isolated from other code/users sharing the same OS/browser profile. On account switch, only the newly verified user's partition is visible; logout clears the active local account selector while preserving cached records for that owner. Offline access must fail closed if no matching local account identity exists. A stale/expired token may never authorize an R2 URL or any remote operation.
+R2's current S3 compatibility documentation lists `Content-MD5` for `PutObject`, but not the `x-amz-checksum-sha256` header. The current server therefore streams the object to compute its trusted SHA-256. No live large-file transfer has been run, so Vercel function duration and cost for a 900 MB verification still need measurement. Single PUT uploads are not resumable; multipart/resume support is future work.
 
-Browser storage is quota-managed and may be evicted. Check `navigator.storage.estimate()` and request `navigator.storage.persist()` where supported; handle denied persistence, `QuotaExceededError`, interruption, and private browsing. Never prefetch the full library. See the [offline-first architecture](offline-first.md) for schema, worker allowlist, sync, and recovery rules.
+## Proposed database migration
 
-## Quota and operating budget
+`supabase/migrations/0003_private_game_uploads.sql` adds idempotency/game identifiers to `upload_sessions` and three security-definer RPCs with an empty `search_path`. Execute permission is revoked from `PUBLIC`, `anon`, and `authenticated`, then granted only to `service_role`. It does not alter RLS or client grants. Its pgTAP suite is `supabase/tests/0004_private_game_uploads.test.sql` and runs inside a transaction with rollback.
 
-The initial product limit is **900 MB per user**, with roughly ten invited users. Ten full quotas use 9,000 MB, leaving about 1,000 MB against a 10 GB-month Standard storage allowance for shared operational headroom. This is a planning ceiling, not a guarantee: define MB/GB consistently in code (recommend decimal bytes), account for pending uploads and retained saves, and enforce both per-user and global limits. Do not issue upload capabilities if projected committed plus reserved bytes exceed the global budget. A full allowance from every user is possible and would exhaust most of the free storage tier.
+This migration has **not** been applied. Before enabling uploads, review and authorize applying it to the dedicated development project, then run all four suites (48 + 10 + 22 = 80 assertions) there. Do not apply it to production as part of this task.
 
-As checked 2026-11-22, Cloudflare lists R2 Standard's free tier as 10 GB-month storage, 1 million Class A requests, 10 million Class B requests, and free internet egress. Standard storage above the included allowance is listed at $0.015 per GB-month; usage is rounded up by billing unit. Infrequent Access has retrieval charges and is not covered by the free tier. Recheck the [official R2 pricing page](https://developers.cloudflare.com/r2/pricing/) before launch and monitor usage; free service tiers and account settings can change.
+## Required setup
 
-## Object naming and metadata
+Create a private R2 bucket with public access disabled. Create an R2 API token scoped to object read/write for that bucket, then configure these server environment variables without committing their values:
 
-Use a private bucket and opaque keys such as `users/{authenticated-user-uuid}/games/{game-uuid}/rom/{object-version}`. The backend creates every UUID and version. Database rows should record owner, game ID, object key, declared and verified size, detected console/extension, checksum algorithm/value, MIME type (treated as advisory), status (`pending`, `ready`, `failed`, `deleting`), timestamps, and upload idempotency key. Do not store client paths.
+- `R2_ACCOUNT_ID`: Cloudflare account ID (32 hexadecimal characters).
+- `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`: bucket-scoped R2 S3 credentials.
+- `R2_BUCKET_NAME`: the private bucket name.
+- `R2_ENDPOINT`: `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`.
+- `SUPABASE_SECRET_KEY`: secret key for the matching Supabase project; server runtime only.
+- `PIXZER_R2_UPLOADS_ENABLED`: leave `false` until the migration, bucket, credentials, and CORS policy have been verified; then set `true` only in that environment.
 
-R2 object metadata is not the authorization source. PostgreSQL ownership plus server-side policy is. Keys may include the user UUID for isolation and operational inspection, but object-key secrecy is not access control.
+Set R2 CORS to allow only `https://pixzer.vercel.app` (and `http://localhost:3000` only for local testing), method `PUT`, headers `Content-Type` and `If-None-Match`, and expose no object listing or public-read access. Keep separate development and production buckets/tokens. Vercel must receive the matching project's public Supabase URL/key and site URL along with the server-only values. Do not copy development secrets into production.
 
-## Upload contract (planned for Phase 3)
+## Acceptance and remaining work
 
-1. **Initiate:** authenticated browser sends filename, byte length, console/file type claim, checksum if available, and an idempotency token. Server validates the extension allowlist (`.gb`, `.gbc`, `.gba`, `.nds`, `.n64`, `.z64`, `.v64`), rejects zero/oversized files, normalizes only the display filename, rate-limits, and reserves the declared bytes atomically against the user's quota and global reserve. Never rely on extension or `Content-Type` alone to establish file validity.
-2. **Reserve and key:** in a database transaction, create a `pending` object record with server-derived owner and random object key. A unique idempotency key prevents retry from allocating another reservation. The browser cannot supply owner, bucket, or final object key.
-3. **Sign:** server generates a time-limited `PUT` presigned URL for exactly that key, with content type and any supported checksum headers included in the signature. Use a short lifetime (for example 5–10 minutes), set the browser CORS allowlist to the production app origins and only required methods/headers, and return the exact headers the client must send. A signed URL can be reused until expiry; therefore it is not one-time-use. Scope it to a pending, reserved object and overwrite-safe unique key, and do not issue another after completion.
-4. **Transfer:** browser uploads directly to R2 over HTTPS and reports the result. Client progress and completion are untrusted hints; they do not mark the record ready.
-5. **Finalize:** server authenticates again, confirms the pending row belongs to the user, inspects R2 metadata (size, key, and checksum where supported), checks quota and checksum, and transitions to `ready` idempotently. If finalization fails, keep the reservation until retry or cleanup; do not make an unverified object playable.
-6. **Recovery:** expire stale pending reservations, delete abandoned objects, and reconcile object listing/metadata against database records. Incomplete multipart uploads should be aborted by lifecycle policy; Cloudflare documents a seven-day default for incomplete multipart uploads. Alert on orphaned objects and quota drift.
+- Apply and test the proposal migration in development; verify RPC ownership, `SECURITY DEFINER`, empty `search_path`, execute ACLs, original RLS, and all 80 pgTAP assertions.
+- Perform real object uploads/downloads in a dedicated bucket, including over-quota, concurrent reservations, abandoned/expired upload, exact-size mismatch, retry, and two-user isolation cases.
+- Add deletion, scheduled reservation/orphan reconciliation, rate limiting, and alerting before broader use. The active-reservation cap is not a general API rate limiter.
+- Test an actual iPhone Safari transfer and a large-file Vercel completion. No emulator/player is implemented, so uploaded files cannot yet be played.
 
-For the initial 900 MB/user maximum, a single presigned `PUT` may be enough. If resumable multipart upload is later added, its create/part/complete/abort operations need an authenticated server-controlled session, per-part limits, expiry, and cleanup. Cloudflare documents a minimum 5 MiB part size (except last), maximum 5 GiB per part, and 10,000 parts. Do not accept arbitrary client-provided multipart IDs.
+## References
 
-## Download, launch, and deletion (planned)
-
-- **Launch/download:** authenticate and look up the game by ID scoped to the current user; require `ready`; then sign a short-lived `GET` for that one private object. Return no raw object key lookup endpoint and never accept a URL or key chosen by the client. EmulatorJS fetches the game bytes from this authorized URL; browser CORS must allow only the app origin and required headers. Signed URLs remain usable until expiry and cannot be revoked individually, so use a very short TTL and avoid caching private content in shared caches.
-- **Delete:** authenticate, scope the game/object row to the current user, mark it `deleting`, delete using server credentials, then remove metadata/release quota only when deletion is confirmed. Make retries idempotent. If R2 deletion succeeds but DB update fails, reconciliation completes the cleanup; if it fails, retain the reservation and surface a retryable error.
-- **Duplicate handling:** initially allow a duplicate per owner or detect duplicates by a verified content hash within that owner. Never deduplicate across users: it complicates independent deletion, accounting, and authorization and can reveal that another user has a particular game.
-
-## Integrity and validation
-
-- Validate size before signing and verify actual stored size after transfer. The declared `Content-Length` is a client claim.
-- Prefer SHA-256 for application integrity checks. If signed checksum headers are supported by the selected AWS SDK/R2 path, bind them into the signature and verify after upload; otherwise stream/read the object server-side for hashing only when the cost is acceptable. Do not equate an S3 ETag with a SHA-256 hash; multipart ETags are not whole-file hashes.
-- Check file signatures/format structure and console-specific constraints in a sandboxed or resource-bounded worker before marking a ROM ready. Initial extension detection is only routing metadata. Do not execute user files on the server.
-- Reject archive formats unless archive extraction is deliberately designed with strict path, expansion-size, and file-count limits.
-- Apply per-account request throttles, bounded concurrent reservations, CSRF/origin protections for cookie-authenticated endpoints, and audit events without signed URLs or secrets.
-
-## Phase 1 server interface proposal
-
-Implement later behind server-only modules, not in client components:
-
-```ts
-type GameConsole = "gb" | "gbc" | "gba" | "nds" | "n64";
-
-interface UploadIntent {
-  filename: string;
-  sizeBytes: number;
-  console: GameConsole;
-  checksum?: { algorithm: "sha256"; value: string };
-  idempotencyKey: string;
-}
-
-interface UploadCapability {
-  uploadId: string;
-  url: string; // bearer token; short lived; never persist or log
-  expiresAt: string;
-  requiredHeaders: Readonly<Record<string, string>>;
-}
-
-interface PrivateGameStorage {
-  createUploadIntent(input: UploadIntent): Promise<UploadCapability>;
-  finalizeUpload(
-    uploadId: string,
-  ): Promise<{ gameId: string; verifiedSizeBytes: number }>;
-  createDownloadCapability(
-    gameId: string,
-  ): Promise<{ url: string; expiresAt: string }>;
-  deleteGame(gameId: string): Promise<void>;
-}
-```
-
-Each method must derive identity from a verified server session, not accept `userId`. These are design contracts only; there is no implementation in Phase 1.
-
-## Cloudflare references
-
-- [R2 pricing](https://developers.cloudflare.com/r2/pricing/) — current rates, free tier, rounding, and GB-month definition.
-- [Presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/) — supported methods, expiry range, signed content type/CORS guidance, bearer-token warning, and S3 endpoint restriction.
-- [Upload objects](https://developers.cloudflare.com/r2/objects/upload-objects/) — direct presigned upload, multipart limits, and incomplete-upload lifecycle.
-- [R2 error codes](https://developers.cloudflare.com/r2/api/error-codes/) — checksum mismatch and multipart failure modes.
-
-## Acceptance before enabling uploads
-
-- Private bucket and least-privilege R2 API token configured outside Git; credentials are available only to server runtime.
-- Authenticated initiation/finalization/download/delete routes enforce owner scope and quota with adversarial cross-user tests.
-- CORS allowlist, signed URL TTL, content size cap, rate limits, and cleanup lifecycle are configured and exercised.
-- Successful and interrupted uploads, repeated initiation/finalization, checksum mismatch, expiry, over-quota, deletion retry, and reconciliation have integration coverage.
-- Billing alerts/usage review are configured and actual usage is checked against the 10 GB-month target.
+- [R2 presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/)
+- [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/)
+- [R2 S3 API compatibility](https://developers.cloudflare.com/r2/api/s3/api/)
+- [R2 upload objects](https://developers.cloudflare.com/r2/objects/upload-objects/)
+- [Vercel Functions limits](https://vercel.com/docs/functions/limitations)
+- [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys)

@@ -56,8 +56,8 @@ export async function AppShell({
             A little space to play
           </div>
           <p className="mt-2 text-xs leading-5 text-muted">
-            Your private library is linked to this account. Game uploads are
-            coming in a later release.
+            Your private library is linked to this account. Private uploads are
+            available after storage setup is complete.
           </p>
         </div>
         <div className="mt-5 flex items-center gap-3 border-t border-token pt-5">

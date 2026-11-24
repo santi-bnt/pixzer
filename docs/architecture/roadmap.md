@@ -11,15 +11,15 @@ The phases are ordered by dependency. Do not start a phase's dependent implement
 
 ## Phase 2 — Accounts, PostgreSQL, and RLS
 
-- Local implementation: email/password and Google OAuth PKCE flows, invitation password setup, recovery, cookie-backed sessions, verified invitation authorization, and the protected account shell are present. The initial schema migration is applied to development project `pxxtzjpjtigikolauxwc`; all four tables, six RLS policies, and 48 pgTAP assertions were verified. Hosted Auth provider settings and real browser flows remain unverified.
+- Local implementation: email/password and Google OAuth PKCE flows, invitation password setup, recovery, cookie-backed sessions, verified invitation authorization, profile provisioning, and the protected account shell are present. Migrations `0001` and `0002`, four tables, six RLS policies, and all 58 pgTAP assertions are verified on development project `pxxtzjpjtigikolauxwc`. Hosted Auth provider settings and real browser flows remain unverified.
 - Configure Supabase Auth for the invited cohort and verify the development redirect URLs, Google provider, invite/recovery templates, and email confirmation settings. No production Auth or database configuration is authorized here. Library rows and favorites are account-scoped and therefore shared across devices using the same account.
-- Acceptance: the database migration and pgTAP checks pass. Still required: verify invitation, email login, Google sign-in/linking, logout, recovery, session persistence, and protected routes with two independent users in real browser sessions; verify that no service-role or Google client secret reaches client bundles. Do not mark Phase 2 complete until these checks have evidence.
+- Acceptance: database migrations and 58 pgTAP checks pass. Still required: verify invitation, email login, Google sign-in/linking, logout, recovery, session persistence, and protected routes with two independent users in real browser sessions; verify that no service-role or Google client secret reaches client bundles. Do not mark Phase 2 complete until these checks have evidence.
 
-## Phase 3 — Private R2 library
+## Phase 3 — Private R2 library (local implementation in progress)
 
-- Implement server-authorized upload intent/completion, private R2 objects, short-lived signed URLs, checksums, deletion, retry/reconciliation, and quota reservation.
-- Enforce 900 MB aggregate per-user quota and a separate global committed-plus-reserved budget with shared reserve; individual file limits alone do not satisfy quota acceptance.
-- Acceptance: integration tests cover wrong-user access, expired/replayed/wrong-object URLs, quota race/overrun, interrupted upload, checksum mismatch, duplicate, deletion retry, and orphan reconciliation. Only verified ready objects can launch.
+- Local code now includes server-authorized upload intent/completion, private R2 signed PUT/GET, streamed SHA-256 verification, a real library query, and transactional quota reservation proposal. The upload migration is not applied; the feature flag is false; no real bucket or credentials are configured.
+- The proposal enforces 900 MB per user and a 9 GB committed-plus-reserved shared ceiling under a transaction advisory lock. It also caps active reservations at two per account.
+- Remaining acceptance: review and explicitly authorize applying `0003_private_game_uploads.sql` only in development, run its 22 transactional pgTAP checks with existing suites (80 total), then exercise real R2 uploads, wrong-user access, expiry/replay, quota concurrency, interrupted upload, checksum mismatch, deletion and orphan reconciliation. Only verified stored objects are listed; none are playable until emulator work is completed.
 
 ## Phase 4 — GB/GBC/GBA PC emulation and desktop input
 
@@ -35,8 +35,8 @@ The phases are ordered by dependency. Do not start a phase's dependent implement
 ## Phase 6 — Offline local foundation
 
 - **Foundation implemented in this update:** account-partitioned IndexedDB records for ROM blobs and immutable save versions/heads/outbox; atomic save/head/outbox commits; byte-level streaming SHA-256 checks; storage estimate/persistence helpers; quota/blocked/abort error handling; bounded sync coordinator over an injected transport; versioned public-only Service Worker shell and offline fallback.
-- **Still required:** integrate identity-derived offline account selection, explicit resumable R2 downloads with progress/cancel/recovery, native-browser persistence tests, emulator save adapters, real cloud transport, and offline-ready/sync UI. The current repository does not expose a working ROM download or game session.
-- This foundation can be developed in parallel with Phase 2 review. Actual game downloads require Phase 3's private R2 download API; playable offline sessions require a compatible emulator from Phases 4 or 5. No offline-ready UI is allowed before those operations work end to end.
+- **Still required:** integrate identity-derived offline account selection, resumable R2 downloads with progress/cancel/recovery, native-browser persistence tests, emulator save adapters, real cloud transport, and offline-ready/sync UI. A server-side signed download endpoint exists locally but is disabled with the rest of R2 until storage setup is complete; no game session is available.
+- This foundation can be developed in parallel with Phase 2 review. Offline game downloads require the private R2 download path and device tests; playable offline sessions require a compatible emulator from Phases 4 or 5. No offline-ready UI is allowed before those operations work end to end.
 - Acceptance: account partitions never expose another user’s records; checksum mismatch/interruption does not replace a verified ROM; local saves survive reload and do not wait on network; worker tests prove that authenticated HTML, API responses, signed URLs, ROMs, and saves never enter Cache Storage; quota and transaction-abort paths are covered.
 
 ## Phase 7 — Private cloud save synchronization and conflicts

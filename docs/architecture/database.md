@@ -1,6 +1,6 @@
 # Database and authentication proposal
 
-Status: Phase 2 schema applied to development project `pxxtzjpjtigikolauxwc`. The four application tables, six RLS policies, and 48 pgTAP assertions have been verified there. Real Auth provider flows remain unverified. No profile-provisioning trigger exists; profile creation is still an explicit lifecycle gap.
+Status: Phase 2 migrations `0001` and `0002` are applied to development project `pxxtzjpjtigikolauxwc`. The four application tables, six unchanged RLS policies, profile-provisioning function and triggers, and all 58 pgTAP assertions have been verified there. Real Auth provider flows remain unverified.
 
 ## Responsibilities
 
@@ -17,9 +17,9 @@ Per-console keyboard/gamepad mappings and iPhone touch-layout calibration are de
 
 Favorites are the sole direct client mutation in this schema. The `games` owner update policy scopes rows to `auth.uid()`, and a column-level SQL grant permits changing only `is_favorite`. All other game metadata changes remain server-mediated. Profile owners can similarly update only `display_name`.
 
-The `games.size_bytes` ceiling is only a per-object sanity bound; a SQL `CHECK` cannot enforce the 900 MB aggregate account quota. Phase 3 must reserve aggregate bytes transactionally (including pending uploads and retained data) and enforce the global storage ceiling in trusted server code or a narrowly scoped database function. RLS alone does not make quota accounting race-safe.
+The `games.size_bytes` ceiling is only a per-object sanity bound; a SQL `CHECK` cannot enforce the 900 MB aggregate account quota. The local upload implementation depends on proposed `0003_private_game_uploads.sql` to reserve aggregate bytes transactionally, including pending uploads, and enforce the shared storage ceiling. That migration is not applied and uploads remain disabled until it is reviewed, authorized, and tested in development.
 
-The schema deliberately leaves invite policy, email verification, account deletion orchestration, save-state core compatibility, and storage accounting reconciliation to later phases. `upload_sessions` is not itself authorization to write an arbitrary object: the backend must bind its opaque key to the authenticated owner and validate completion against R2.
+The schema deliberately leaves email delivery, account deletion orchestration, save-state core compatibility, and storage accounting reconciliation to later phases. The reviewed profile-provisioning migration `0002_invited_profile_provisioning.sql` is applied in development: its security-definer trigger checks only Supabase-maintained `auth.users.invited_at`, and its backfill creates rows only for already invited users. It does not grant client INSERT access or change RLS. `upload_sessions` is not itself authorization to write an arbitrary object: the backend must bind its opaque key to the authenticated owner and validate completion against R2.
 
 ## Future offline save-sync migration (not applied)
 
@@ -35,13 +35,13 @@ These records remain owner-scoped under RLS; browser clients receive no INSERT/U
 
 ## Ownership and policies
 
-RLS is enabled on all four application tables. Owners can select their own profile, games, upload sessions, and saves; profile and game update policies additionally scope mutation to the owner. SQL privileges are separately revoked from `PUBLIC`, `anon`, and `authenticated`, then narrowly granted: authenticated SELECT on all four tables, UPDATE on `profiles.display_name`, and UPDATE on `games.is_favorite`. PostgreSQL checks grants before policies, so the column grants close updates to other fields; there are no client INSERT/DELETE grants or policies. No profile trigger is installed: profile row provisioning is deferred to a reviewed invite lifecycle step.
+RLS is enabled on all four application tables. Owners can select their own profile, games, upload sessions, and saves; profile and game update policies additionally scope mutation to the owner. SQL privileges are separately revoked from `PUBLIC`, `anon`, and `authenticated`, then narrowly granted: authenticated SELECT on all four tables, UPDATE on `profiles.display_name`, and UPDATE on `games.is_favorite`. PostgreSQL checks grants before policies, so the column grants close updates to other fields; there are no client INSERT/DELETE grants or policies. The applied invited-user provisioning migration adds a trusted-invite profile trigger without changing RLS or client grants.
 
 Privileged service-role code bypasses RLS, so every server handler still needs authentication, owner-scoped queries, schema validation, and explicit object-key checks. Never expose the service role or R2 credentials to the browser.
 
 ## Operational rules
 
-- Upload flow should reserve quota transactionally before signing an upload, enforce the 900 MB per-user cap on the server, and release the reservation on failure or expiry. A periodic reconciliation should compare database records to R2 inventory.
+- The local upload flow reserves quota before signing, enforcing the 900 MB per-user cap and 9 GB shared ceiling through proposed RPCs. Because the migration is unapplied, this flow remains disabled. A periodic reconciliation should compare database records to R2 inventory.
 - Compute and verify SHA-256 server-side or through a trusted completion workflow; a client-reported hash is only a hint.
 - Deletion should mark an operation pending, remove the R2 object, then finalize metadata; retries must be idempotent and orphan cleanup must be possible.
 - Signed URLs are short-lived bearer capabilities. Keep expiry minimal and never persist them in database rows or logs.
@@ -49,4 +49,4 @@ Privileged service-role code bypasses RLS, so every server handler still needs a
 
 ## Migration notes
 
-`supabase/migrations/0001_initial_schema.sql` is a reviewed local Phase 2 migration. Apply only after checking the target project's existing schema and Supabase version. It creates application tables, RLS policies, and explicit client-role grants but intentionally does not modify `auth.users`, configure Storage, create credentials, or provision R2. No hosted or local Supabase project is configured for this phase, so this migration has not been executed and its policies have not been live-tested. A later migration should add transactional quota reservations and server RPCs only after the upload protocol is agreed.
+`supabase/migrations/0001_initial_schema.sql` and `0002_invited_profile_provisioning.sql` have been applied to the dedicated development project `pxxtzjpjtigikolauxwc`; four application tables, six original RLS policies, and 58 pgTAP assertions were verified there. `0003_private_game_uploads.sql` is a separate, local proposal that adds server-side quota reservation/completion RPCs without changing RLS. It has not been applied; review and explicit authorization are required before database changes.

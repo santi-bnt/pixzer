@@ -1,51 +1,27 @@
 import { AppShell } from "@/components/app-shell";
-import { Button, Notice, SectionTitle } from "@/components/ui";
+import { SectionTitle } from "@/components/ui";
+import { GameUploadForm } from "@/features/library/game-upload-form";
+import { getR2ServerConfig } from "@/lib/r2/server";
+import { hasPrivilegedSupabaseConfig } from "@/lib/supabase/admin";
+
+export const dynamic = "force-dynamic";
 
 export default function UploadPage() {
+  const storageEnabled =
+    process.env.PIXZER_R2_UPLOADS_ENABLED === "true" &&
+    hasPrivilegedSupabaseConfig() &&
+    Boolean(getR2ServerConfig());
+
   return (
     <AppShell active="Add a game">
       <SectionTitle eyebrow="Add to library" title="Bring your own games">
-        Upload support is planned for a later phase. pixzer will only accept
-        files you are legally allowed to use.
+        Choose a supported file you are legally allowed to store. pixzer verifies
+        each upload in private storage before adding it to your library.
       </SectionTitle>
-      <div className="panel mx-auto max-w-3xl rounded-3xl p-5 sm:p-9">
-        <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-accent/25 bg-accent/[.025] px-5 py-10 text-center">
-          <div>
-            <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-accent/10 text-2xl text-accent">
-              ↑
-            </div>
-            <h2 className="mt-4 text-lg font-semibold">
-              Secure uploads are not ready yet
-            </h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
-              This screen does not upload or store files. Once available, you’ll
-              be able to choose a supported game file and see its storage usage.
-            </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
-              {[".gb", ".gbc", ".gba", ".nds", ".n64", ".z64", ".v64"].map(
-                (ext) => (
-                  <span
-                    key={ext}
-                    className="pill rounded-md px-2 py-1 font-mono text-xs text-muted"
-                  >
-                    {ext}
-                  </span>
-                ),
-              )}
-            </div>
-            <Button disabled>Choose a game file</Button>
-          </div>
-        </div>
-        <div className="mt-5">
-          <Notice
-            title="Keep ownership in mind"
-            body="You are responsible for ensuring each game file is legally obtained and that you have the right to store it. No commercial games, BIOS files, or firmware are provided here."
-          />
-        </div>
-      </div>
-      <div className="mx-auto mt-5 flex max-w-3xl justify-between text-xs text-subtle">
-        <span>Private storage · planned</span>
-        <span>Quota checks · planned</span>
+      <GameUploadForm storageEnabled={storageEnabled} />
+      <div className="mx-auto mt-5 flex max-w-3xl flex-wrap justify-between gap-2 text-xs text-subtle">
+        <span>Private Cloudflare R2 storage</span>
+        <span>900 MB per account · 9 GB shared storage ceiling</span>
       </div>
     </AppShell>
   );
