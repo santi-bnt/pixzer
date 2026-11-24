@@ -12,8 +12,6 @@ values
 
 insert into public.profiles (id, display_name)
 values
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Owner A'),
-  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Owner B'),
   ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'Uninvited C');
 
 insert into public.games

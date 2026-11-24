@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 2 uses Supabase Auth for identity and PostgreSQL Row Level Security (RLS) for browser-visible metadata. The schema and policies have been applied and verified on the dedicated development project `pxxtzjpjtigikolauxwc`; real browser Auth flows and hosted provider settings remain unverified. Authentication and authorization are separate checks: Next.js server code verifies the user's claims, and PostgreSQL independently filters rows and enforces grants.
+Phase 2 uses Supabase Auth for identity and PostgreSQL Row Level Security (RLS) for browser-visible metadata. Migrations `0001` and `0002`, four tables, six policies, and 58 pgTAP assertions have been verified on the dedicated development project `pxxtzjpjtigikolauxwc`; real browser Auth flows and hosted provider settings remain unverified. Authentication and authorization are separate checks: Next.js server code verifies the user's claims, and PostgreSQL independently filters rows and enforces grants.
 
 ## Trust boundaries
 
@@ -11,6 +11,7 @@ Phase 2 uses Supabase Auth for identity and PostgreSQL Row Level Security (RLS) 
 - A valid Supabase identity is not sufficient for pixzer access. `getAuthorizedUser()` verifies the user through Auth and requires Supabase's trusted `invited_at` marker. The OAuth/email callback also checks this marker after exchanging a code or invite/recovery token and signs out sessions without it. Do not substitute editable `user_metadata`, Google email text, or client-supplied IDs.
 - `auth.uid()` is the source of the database identity. RLS policies compare it to the row owner. Table grants and RLS are both required; neither replaces the other.
 - RLS additionally calls `public.is_invited_pixzer_user()`, a narrow `SECURITY DEFINER` predicate with an empty `search_path`, to check the server-maintained `auth.users.invited_at` marker. It grants no row access to an authenticated but uninvited identity.
+- Profile provisioning is applied in the development project as a separate migration. Its trigger uses `auth.users.invited_at`, not `raw_user_meta_data`, inserts only the matching Auth UUID, and runs as a revoked security-definer function. It adds no browser INSERT privilege and does not change the existing RLS policies.
 - Game bytes and save bytes remain in private R2 storage. Future server operations must derive ownership from the verified session, check the corresponding metadata row, and issue narrowly scoped short-lived signed URLs. Signed URLs are bearer capabilities and must not be logged or stored as durable authorization.
 - Public registration is disabled for the initial invite-only cohort. Invites are issued through the Supabase Dashboard; no service-role invite endpoint is part of Phase 2. Google OAuth does not grant access by itself; Supabase `enable_signup=false` is defense in depth, while the app callback, protected server shell, and RLS independently require invitation authorization.
 - Google and email/password identities remain owned by the same Supabase user ID when Supabase performs its verified same-email automatic identity link. pixzer does not merge accounts itself; Supabase rejects linking to unverified email identities to prevent account takeover.
