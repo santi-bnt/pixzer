@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
-import { Button, GameTile, Notice, SectionTitle } from "@/components/ui";
+import { ConsolePlatformShowcase } from "@/components/console-platform-showcase";
+import { Button, Notice, SectionTitle } from "@/components/ui";
 
 export default function LibraryPage() {
   return (
@@ -25,7 +26,7 @@ export default function LibraryPage() {
           </div>
         </div>
         <div className="panel rounded-2xl p-5">
-          <div className="text-xs text-muted">SUPPORTED SYSTEMS</div>
+          <div className="text-xs text-muted">PLATFORM TARGETS</div>
           <div className="mt-3 text-3xl font-semibold">5</div>
           <div className="mt-1 text-xs text-subtle">
             Compatibility testing pending
@@ -36,30 +37,10 @@ export default function LibraryPage() {
         title="Your private library is coming together"
         body="Secure uploads are not available yet. Nothing has been uploaded or stored. When uploads are enabled, your games will be private to your account."
       />
-      <div className="mt-9 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">A preview of your shelves</h2>
-        <span className="text-xs text-subtle">Illustrative only</span>
-      </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <GameTile
-          title="Handheld classics"
-          code="GB"
-          color="bg-gradient-to-br from-[#c72c32] to-[#6e151a]"
-        />
-        <GameTile
-          title="Colorful worlds"
-          code="GBC"
-          color="bg-gradient-to-br from-[#55565c] to-[#29292e]"
-        />
-        <GameTile
-          title="Pocket adventures"
-          code="GBA"
-          color="bg-gradient-to-br from-[#9b4548] to-[#492327]"
-        />
-        <GameTile
-          title="Big screen"
-          code="N64"
-          color="bg-gradient-to-br from-[#77716b] to-[#3d3935]"
+      <div className="mt-8 -mx-5 sm:-mx-6">
+        <ConsolePlatformShowcase
+          heading="A closer look at the hardware."
+          description="Stylized illustrations of pixzer's planned platforms. Compatibility testing is still in progress; no games are shown here."
         />
       </div>
     </AppShell>
