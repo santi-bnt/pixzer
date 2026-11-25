@@ -6,6 +6,7 @@ import {
   completeAuthFragment,
   hasAuthFragment,
 } from "@/features/auth/fragment-flow.mjs";
+import { mapOAuthFragmentError } from "@/features/auth/oauth-error-flow.mjs";
 import { createClient } from "@/lib/supabase/client";
 
 type CallbackStatus = "verifying" | "invalid" | "unauthorized" | "unavailable";
@@ -36,6 +37,11 @@ export function AuthFragmentBridge() {
 
     const fragment = window.location.hash;
     window.history.replaceState(window.history.state, "", callbackPath);
+    const oauthError = mapOAuthFragmentError(fragment);
+    if (oauthError) {
+      navigateToError(oauthError);
+      return;
+    }
 
     void (async () => {
       try {

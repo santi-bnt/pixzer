@@ -1,7 +1,18 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(27);
+
+select ok(
+  exists (
+    select 1
+    from pg_catalog.pg_attribute
+    where attrelid = 'public.upload_sessions'::regclass
+      and attname = 'object_cleanup_completed_at'
+      and not attisdropped
+  ),
+  'expired-object cleanup has a retry-safe completion marker'
+);
 
 select ok((select relrowsecurity from pg_catalog.pg_class where oid = 'public.profiles'::regclass), 'profiles RLS stays enabled');
 select ok((select relrowsecurity from pg_catalog.pg_class where oid = 'public.games'::regclass), 'games RLS stays enabled');
@@ -56,6 +67,9 @@ select ok((
 insert into auth.users (id, email, invited_at, raw_user_meta_data)
 values ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'storage-test@example.invalid', now(), '{}'::jsonb);
 
+insert into auth.users (id, email, invited_at, raw_user_meta_data)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'storage-other@example.invalid', now(), '{}'::jsonb);
+
 create temporary table upload_fixture on commit drop as
 select *
 from public.reserve_game_upload(
@@ -107,6 +121,43 @@ select is((
     repeat('a', 64)
   )
 ), (select reserved_game_id from upload_fixture), 'repeated completion returns the same game');
+
+select throws_ok(
+  $$select * from public.complete_game_upload('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', (select reserved_upload_id from upload_fixture), 100, repeat('a', 64))$$,
+  '42501', 'Upload session unavailable', 'a different user cannot complete this upload reservation'
+);
+select throws_ok(
+  $$select * from public.complete_game_upload('dddddddd-dddd-4ddd-8ddd-dddddddddddd', (select reserved_upload_id from upload_fixture), 99, repeat('a', 64))$$,
+  '22023', 'Upload session is not eligible for completion', 'completion rejects a verified size that differs from the reservation'
+);
+select throws_ok(
+  $$select * from public.complete_game_upload('dddddddd-dddd-4ddd-8ddd-dddddddddddd', (select reserved_upload_id from upload_fixture), 100, 'not-a-sha256')$$,
+  '22023', 'Invalid verified upload metadata', 'completion rejects a malformed content hash'
+);
+
+create temporary table expiring_upload_fixture on commit drop as
+select *
+from public.reserve_game_upload(
+  'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  'expire.gb', 'Expiring test', 'gb', 100,
+  '22222222-2222-4222-8222-222222222222'
+);
+update public.upload_sessions
+set expires_at = now() - interval '1 second'
+where id = (select reserved_upload_id from expiring_upload_fixture);
+select is(
+  public.expire_game_upload(
+    'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    (select reserved_upload_id from expiring_upload_fixture)
+  ),
+  true,
+  'an expired reservation transitions to its terminal expired state'
+);
+select is(
+  (select count(*)::integer from public.upload_sessions where id = (select reserved_upload_id from expiring_upload_fixture) and status in ('pending', 'uploaded')),
+  0,
+  'expired reservation is excluded from active upload status'
+);
 
 select * from finish();
 rollback;

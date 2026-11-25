@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Brand } from "@/components/ui";
 import { LoginForm } from "@/features/auth/login-form";
-import { parseOAuthError } from "@/features/auth/oauth-errors";
+import { parseOAuthError } from "@/features/auth/oauth-error-flow.mjs";
 import { safeNextPath } from "@/features/auth/safe-next";
 import { AppearanceSelect } from "@/features/appearance/theme-provider";
 

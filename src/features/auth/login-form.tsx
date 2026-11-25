@@ -12,7 +12,7 @@ import { safeNextPath } from "@/features/auth/safe-next";
 import {
   getOAuthErrorMessage,
   type OAuthErrorCode,
-} from "@/features/auth/oauth-errors";
+} from "@/features/auth/oauth-error-flow.mjs";
 
 function GoogleMark() {
   return (

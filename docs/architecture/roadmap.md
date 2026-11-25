@@ -15,11 +15,12 @@ The phases are ordered by dependency. Do not start a phase's dependent implement
 - Configure Supabase Auth for the invited cohort and verify the development redirect URLs, Google provider, invite/recovery templates, and email confirmation settings. No production Auth or database configuration is authorized here. Library rows and favorites are account-scoped and therefore shared across devices using the same account.
 - Acceptance: database migrations and 58 pgTAP checks pass. Still required: verify invitation, email login, Google sign-in/linking, logout, recovery, session persistence, and protected routes with two independent users in real browser sessions; verify that no service-role or Google client secret reaches client bundles. Do not mark Phase 2 complete until these checks have evidence.
 
-## Phase 3 — Private R2 library (local implementation in progress)
+## Phase 3 — Private game storage (provider integration in progress)
 
 - Local code now includes server-authorized upload intent/completion, private R2 signed PUT/GET, streamed SHA-256 verification, a real library query, and transactional quota reservation proposal. The upload migration is not applied; the feature flag is false; no real bucket or credentials are configured.
 - The proposal enforces 900 MB per user and a 9 GB committed-plus-reserved shared ceiling under a transaction advisory lock. It also caps active reservations at two per account.
-- Remaining acceptance: review and explicitly authorize applying `0003_private_game_uploads.sql` only in development, run its 22 transactional pgTAP checks with existing suites (80 total), then exercise real R2 uploads, wrong-user access, expiry/replay, quota concurrency, interrupted upload, checksum mismatch, deletion and orphan reconciliation. Only verified stored objects are listed; none are playable until emulator work is completed.
+- Remaining acceptance: review and explicitly authorize applying `0003_private_game_uploads.sql` only in development, run its 27 transactional pgTAP checks with the existing suites (85 total), then exercise real R2 uploads, wrong-user access, expiry/replay, quota concurrency, interrupted upload, checksum mismatch, deletion and orphan reconciliation. Only verified stored objects are listed; none are playable until emulator work is completed.
+- Google Drive per-user OAuth (`drive.file`), token encryption, direct resumable upload routes, server-streamed downloads, library provider metadata, and a 32-assertion proposal suite are now local and disabled. Migration `0004_google_drive_storage.sql` depends on proposal `0003`; neither is applied. R2 stays disabled. No real Google test-user OAuth or file transfer has been executed. The provider test suite totals 117 assertions with the earlier 48 + 10 + 27 suites; run only in the dedicated development project after explicit migration authorization.
 
 ## Phase 4 — GB/GBC/GBA PC emulation and desktop input
 

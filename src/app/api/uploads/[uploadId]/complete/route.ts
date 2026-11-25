@@ -63,7 +63,7 @@ export async function POST(
 
   const user = await getAuthorizedUser();
   if (!user) return privateJson({ error: "invited-account-required" }, 401);
-  if (process.env.PIXZER_R2_UPLOADS_ENABLED !== "true") {
+  if (process.env.PIXZER_GAME_STORAGE_PROVIDER !== "r2" || process.env.PIXZER_R2_UPLOADS_ENABLED !== "true") {
     return privateJson({ error: "private-storage-not-configured" }, 503);
   }
 

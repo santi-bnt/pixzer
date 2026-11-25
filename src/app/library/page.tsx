@@ -3,6 +3,7 @@ import { ConsolePlatformShowcase } from "@/components/console-platform-showcase"
 import { Button, Notice, SectionTitle } from "@/components/ui";
 import { getUserLibrary } from "@/lib/db/library";
 import { getAuthorizedUser } from "@/lib/supabase/user";
+import { DeleteDriveGameButton } from "@/features/library/delete-drive-game-button";
 
 const consoleNames: Record<string, string> = {
   gb: "Game Boy",
@@ -88,7 +89,7 @@ export default async function LibraryPage() {
                   </div>
                   <p className="mt-1 break-all text-xs text-muted">{game.fileName}</p>
                   <p className="mt-2 text-xs text-subtle">
-                    {consoleNames[game.console]} · {formatSize(game.sizeBytes)} · Stored {new Date(game.createdAt).toLocaleDateString("en", { dateStyle: "medium", timeZone: "UTC" })}
+                    {consoleNames[game.console]} · {formatSize(game.sizeBytes)} · {game.storageProvider === "google_drive" ? "Google Drive" : "Cloudflare R2"} · Stored {new Date(game.createdAt).toLocaleDateString("en", { dateStyle: "medium", timeZone: "UTC" })}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 sm:shrink-0">
@@ -99,6 +100,9 @@ export default async function LibraryPage() {
                   >
                     Download original
                   </a>
+                  {game.storageProvider === "google_drive" && (
+                    <DeleteDriveGameButton gameId={game.id} title={game.title} />
+                  )}
                 </div>
               </li>
             ))}

@@ -3,7 +3,8 @@
 
 alter table public.upload_sessions
   add column if not exists game_id uuid,
-  add column if not exists idempotency_key uuid;
+  add column if not exists idempotency_key uuid,
+  add column if not exists object_cleanup_completed_at timestamptz;
 
 create unique index if not exists upload_sessions_user_idempotency_idx
   on public.upload_sessions (user_id, idempotency_key)

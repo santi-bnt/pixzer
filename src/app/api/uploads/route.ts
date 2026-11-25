@@ -64,6 +64,7 @@ async function removeExpiredReservations(
   const { data, error } = await supabase
     .from("upload_sessions")
     .select("id, object_key")
+    .is("object_cleanup_completed_at", null)
     .eq("user_id", userId)
     .in("status", ["pending", "uploaded", "expired"])
     .lt("expires_at", new Date().toISOString())
@@ -104,6 +105,14 @@ async function removeExpiredReservations(
     await r2.send(
       new DeleteObjectCommand({ Bucket: bucketName, Key: row.object_key }),
     );
+    const { error: cleanupMarkerError } = await supabase
+      .from("upload_sessions")
+      .update({ object_cleanup_completed_at: new Date().toISOString() })
+      .eq("id", row.id)
+      .eq("user_id", userId)
+      .eq("status", "expired")
+      .is("object_cleanup_completed_at", null);
+    if (cleanupMarkerError) throw new Error("expired-reservation-marker-failed");
   }
 }
 
@@ -118,7 +127,7 @@ export async function POST(request: Request): Promise<Response> {
   const user = await getAuthorizedUser();
   if (!user) return privateJson({ error: "invited-account-required" }, 401);
 
-  if (process.env.PIXZER_R2_UPLOADS_ENABLED !== "true") {
+  if (process.env.PIXZER_GAME_STORAGE_PROVIDER !== "r2" || process.env.PIXZER_R2_UPLOADS_ENABLED !== "true") {
     return privateJson({ error: "private-storage-not-configured" }, 503);
   }
 

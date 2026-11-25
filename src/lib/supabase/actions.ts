@@ -3,6 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getPasswordSignInOutcome } from "@/features/auth/fragment-flow.mjs";
+import { buildSupabaseGoogleOAuthOptions } from "@/features/auth/oauth-error-flow.mjs";
 import { safeNextPath } from "@/features/auth/safe-next";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -126,10 +127,7 @@ export async function startGoogleOAuthAction(
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: callbackUrl.toString(),
-        skipBrowserRedirect: true,
-      },
+      options: buildSupabaseGoogleOAuthOptions(callbackUrl.toString()),
     });
 
     if (!error && data.url) {
