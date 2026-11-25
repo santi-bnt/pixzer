@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { ConsolePlatformShowcase } from "@/components/console-platform-showcase";
-import { Button, Notice, SectionTitle } from "@/components/ui";
+import { Button, Notice } from "@/components/ui";
 import { getUserLibrary } from "@/lib/db/library";
 import { getAuthorizedUser } from "@/lib/supabase/user";
 import { DeleteDriveGameButton } from "@/features/library/delete-drive-game-button";
@@ -28,13 +28,23 @@ export default async function LibraryPage() {
 
   return (
     <AppShell active="My library">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <SectionTitle eyebrow="Your space" title="My library">
-          Games stored by your invited account stay private to you. Stored games
-          are not playable until a compatible emulator is integrated.
-        </SectionTitle>
-        <Button href="/upload">＋ Add a game</Button>
-      </div>
+      <header className="mb-8 grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-8">
+        <div className="min-w-0">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[.2em] text-accent">
+            Your space
+          </p>
+          <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            My library
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
+            Games stored by your invited account stay private to you. Stored
+            games are not playable until a compatible emulator is integrated.
+          </p>
+        </div>
+        <div className="w-full sm:w-auto [&>a]:w-full sm:[&>a]:w-auto">
+          <Button href="/upload">+ Add a game</Button>
+        </div>
+      </header>
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <div className="panel rounded-2xl p-5">
           <div className="text-xs text-muted">IN YOUR LIBRARY</div>
