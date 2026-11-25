@@ -5,7 +5,7 @@ import { isOwnedGameObjectKey, isValidUploadId } from "@/lib/r2/upload-validatio
 import { createClient } from "@/lib/supabase/server";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthorizedUser } from "@/lib/supabase/user";
-import { parseSafeDriveMediaRedirect } from "@/lib/google-drive/contracts.mjs";
+import { isOwnedDriveGameMetadata, parseSafeDriveMediaRedirect } from "@/lib/google-drive/contracts.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,27 +13,6 @@ export const maxDuration = 300;
 
 function unavailable(status: number): Response {
   return new Response(null, { status, headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" } });
-}
-
-function safeFileName(value: string): string {
-  return value.replace(/[\r\n"\\]/g, "_").slice(0, 255);
-}
-
-async function fetchDriveMedia(accessToken: string, fileId: string): Promise<Response> {
-  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`);
-  url.searchParams.set("alt", "media");
-  const first = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-    redirect: "manual",
-  });
-  if (first.status < 300 || first.status >= 400) return first;
-  const location = first.headers.get("location");
-  if (!location) throw new Error("drive-download-redirect-missing");
-  const destination = parseSafeDriveMediaRedirect(location, url.toString());
-  if (!destination) throw new Error("drive-download-redirect-invalid");
-  // Google media redirects carry a short-lived URL capability; never add the OAuth token to it.
-  return fetch(destination, { cache: "no-store", redirect: "error" });
 }
 
 export async function GET(
@@ -48,17 +27,17 @@ export async function GET(
   try {
     const supabase = await createClient();
     const gameResult = await supabase.from("games")
-      .select("id, user_id, file_name, object_key, storage_provider, provider_file_id, provider_account_id, size_bytes")
+      .select("id, user_id, file_name, object_key, storage_provider, provider_file_id, provider_account_id, provider_checksum, size_bytes")
       .eq("id", gameId).eq("user_id", user.id).maybeSingle();
     let data: {
-      id: string; user_id: string; file_name: string; object_key: string;
+      id: string; user_id: string; file_name: string; object_key: string; provider_checksum?: string | null;
       storage_provider: string; provider_file_id: string | null;
       provider_account_id: string | null; size_bytes: number;
     } | null = gameResult.data;
     let error: unknown = gameResult.error;
     if (gameResult.error) {
       const fallback = await supabase.from("games")
-        .select("id, user_id, file_name, object_key, size_bytes")
+          .select("id, user_id, file_name, object_key, size_bytes")
         .eq("id", gameId).eq("user_id", user.id).maybeSingle();
       data = fallback.data ? { ...fallback.data, storage_provider: "r2", provider_file_id: null, provider_account_id: null } : null;
       error = fallback.error;
@@ -80,32 +59,36 @@ export async function GET(
       const refreshToken = decryptRefreshToken(connection, config.encryptionKey);
       const accessToken = await refreshDriveAccessToken(config, refreshToken);
       const metadataUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(data.provider_file_id)}`);
-      metadataUrl.searchParams.set("fields", "id,name,size,trashed,appProperties,owners(permissionId)");
+      metadataUrl.searchParams.set("fields", "id,name,size,md5Checksum,webContentLink,trashed,appProperties,owners(permissionId),capabilities(canDownload)");
       const metadataResponse = await fetch(metadataUrl, {
         headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store", redirect: "error",
       });
       const metadata: unknown = await metadataResponse.json().catch(() => null);
       if (!metadataResponse.ok || typeof metadata !== "object" || metadata === null) return unavailable(404);
+      if (!isOwnedDriveGameMetadata(metadata, {
+        sizeBytes: Number(data.size_bytes),
+        fileName: data.file_name,
+        gameId,
+        permissionId: data.provider_account_id,
+        fileId: data.provider_file_id,
+        providerChecksum: data.provider_checksum ?? undefined,
+        requireCanDownload: true,
+      })) return unavailable(404);
       const record = metadata as Record<string, unknown>;
-      const properties = record.appProperties as Record<string, unknown> | undefined;
-      const owners = record.owners as Array<Record<string, unknown>> | undefined;
-      if (record.id !== data.provider_file_id || record.name !== data.file_name || record.trashed === true ||
-          Number(record.size) !== Number(data.size_bytes) || properties?.pixzerGameId !== gameId ||
-          !Array.isArray(owners) || !owners.some((owner) => owner.permissionId === data.provider_account_id)) return unavailable(404);
-
-      const media = await fetchDriveMedia(accessToken, data.provider_file_id);
-      if (!media.ok || !media.body) return unavailable(502);
-      const downloadName = safeFileName(data.file_name);
-      return new Response(media.body, {
-        status: 200,
+      const destination = parseSafeDriveMediaRedirect(
+        typeof record.webContentLink === "string" ? record.webContentLink : null,
+        metadataUrl.toString(),
+      );
+      if (!destination) return unavailable(502);
+      // Google documents webContentLink for browser downloads of binary files.
+      // The protected request validates the pixzer account first; ROM bytes
+      // then travel from Drive to the browser, not through Vercel.
+      return new Response(null, {
+        status: 302,
         headers: {
-          "Content-Type": "application/octet-stream",
-          "Content-Length": String(data.size_bytes),
-          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+          Location: destination.toString(),
           "Cache-Control": "private, no-store",
           "Referrer-Policy": "no-referrer",
-          "X-Content-Type-Options": "nosniff",
-          "X-Accel-Buffering": "no",
         },
       });
     }

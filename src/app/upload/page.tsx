@@ -2,25 +2,15 @@ import { AppShell } from "@/components/app-shell";
 import { SectionTitle } from "@/components/ui";
 import { GameUploadForm } from "@/features/library/game-upload-form";
 import { DriveStoragePanel } from "@/features/library/drive-storage-panel";
-import { getGoogleDriveConfig } from "@/lib/google-drive/server";
+import { areDriveUploadsEnabled, getGoogleDriveConfig, isGoogleDriveSelectedAndEnabled } from "@/lib/google-drive/server";
 import { getR2ServerConfig } from "@/lib/r2/server";
 import { hasPrivilegedSupabaseConfig } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-export default async function UploadPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ drive?: string | string[] }>;
-}) {
-  const params = await searchParams;
-  const driveValue = Array.isArray(params.drive) ? params.drive[0] : params.drive;
-  const driveResult = driveValue === "connected" || driveValue === "failed" || driveValue === "consent-required"
-    ? driveValue
-    : undefined;
+export default function UploadPage() {
   const storageProvider = process.env.PIXZER_GAME_STORAGE_PROVIDER ?? "google_drive";
-  const driveEnabled = storageProvider === "google_drive" &&
-    process.env.PIXZER_GOOGLE_DRIVE_ENABLED === "true" &&
+  const driveEnabled = isGoogleDriveSelectedAndEnabled() &&
     Boolean(getGoogleDriveConfig()) && hasPrivilegedSupabaseConfig();
   const r2Enabled = storageProvider === "r2" &&
     process.env.PIXZER_R2_UPLOADS_ENABLED === "true" &&
@@ -33,7 +23,7 @@ export default async function UploadPage({
         the stored file before adding it to your private library.
       </SectionTitle>
       {storageProvider === "google_drive" ? (
-        <DriveStoragePanel enabled={driveEnabled} oauthResult={driveResult} />
+        <DriveStoragePanel enabled={driveEnabled} showUpload uploadsEnabled={driveEnabled && areDriveUploadsEnabled()} />
       ) : (
         <>
           <GameUploadForm storageEnabled={r2Enabled} />

@@ -4,6 +4,9 @@ import { Button, Notice } from "@/components/ui";
 import { getUserLibrary } from "@/lib/db/library";
 import { getAuthorizedUser } from "@/lib/supabase/user";
 import { DeleteDriveGameButton } from "@/features/library/delete-drive-game-button";
+import { DriveStoragePanel } from "@/features/library/drive-storage-panel";
+import { getGoogleDriveConfig, isGoogleDriveSelectedAndEnabled } from "@/lib/google-drive/server";
+import { hasPrivilegedSupabaseConfig } from "@/lib/supabase/admin";
 
 const consoleNames: Record<string, string> = {
   gb: "Game Boy",
@@ -18,7 +21,16 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
 
-export default async function LibraryPage() {
+export default async function LibraryPage({ searchParams }: {
+  searchParams: Promise<{ drive?: string | string[] }>;
+}) {
+  const { drive } = await searchParams;
+  const driveResult = drive === "connected" || drive === "failed" || drive === "consent-required"
+    ? drive
+    : undefined;
+  const driveSelected = (process.env.PIXZER_GAME_STORAGE_PROVIDER ?? "google_drive") === "google_drive";
+  const driveEnabled = isGoogleDriveSelectedAndEnabled() &&
+    Boolean(getGoogleDriveConfig()) && hasPrivilegedSupabaseConfig();
   const user = await getAuthorizedUser();
   const library = user
     ? await getUserLibrary(user.id)
@@ -45,6 +57,11 @@ export default async function LibraryPage() {
           <Button href="/upload">+ Add a game</Button>
         </div>
       </header>
+      {driveSelected && (
+        <div className="mb-8">
+          <DriveStoragePanel enabled={driveEnabled} oauthResult={driveResult} />
+        </div>
+      )}
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <div className="panel rounded-2xl p-5">
           <div className="text-xs text-muted">IN YOUR LIBRARY</div>

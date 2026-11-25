@@ -43,7 +43,7 @@ begin
       add constraint games_provider_checksum_check
       check (
         (storage_provider = 'r2' and sha256 is not null and provider_checksum is null)
-        or (storage_provider = 'google_drive' and sha256 is null and provider_checksum ~ '^[a-f0-9]{32}$')
+        or (storage_provider = 'google_drive' and sha256 is null and provider_checksum is not null and provider_checksum ~ '^[a-f0-9]{32}$')
       );
   end if;
 end;

@@ -42,6 +42,22 @@ export function parseDriveUploadOffset(rangeHeader, totalBytes) {
   return lastByte + 1;
 }
 
+export function selectPersistedDriveUploadCapability(claimed, winner, now = Date.now()) {
+  const row = claimed ?? winner;
+  if (!row || typeof row !== "object") return null;
+  if (!claimed && row.status !== "uploading") return null;
+  const expiresAt = Date.parse(row.expires_at);
+  if (!Number.isFinite(expiresAt) || expiresAt <= now ||
+      typeof row.resumable_uri_ciphertext !== "string" || !row.resumable_uri_ciphertext ||
+      typeof row.resumable_uri_nonce !== "string" || !row.resumable_uri_nonce ||
+      typeof row.resumable_uri_tag !== "string" || !row.resumable_uri_tag) return null;
+  return {
+    ciphertext: row.resumable_uri_ciphertext,
+    nonce: row.resumable_uri_nonce,
+    tag: row.resumable_uri_tag,
+  };
+}
+
 export function isDriveFileMetadata(value, expectedSize) {
   return Boolean(
     value && typeof value === "object" &&
@@ -57,9 +73,11 @@ export function isDriveOwnedUploadMetadata(value, expected) {
   if (value.name !== expected.fileName) return false;
   const properties = value.appProperties;
   const owners = value.owners;
+  const capabilities = value.capabilities;
   return Boolean(properties && typeof properties === "object" && properties.pixzerGameId === expected.gameId &&
     Array.isArray(owners) && owners.some((owner) => owner && typeof owner === "object" && owner.permissionId === expected.permissionId) &&
     (expected.fileId === undefined || value.id === expected.fileId) &&
+    (expected.requireCanDownload !== true || (capabilities && typeof capabilities === "object" && capabilities.canDownload === true)) &&
     typeof value.md5Checksum === "string" && /^[a-f0-9]{32}$/i.test(value.md5Checksum));
 }
 

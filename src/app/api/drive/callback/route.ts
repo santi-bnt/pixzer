@@ -7,8 +7,8 @@ import { decryptRefreshToken, encryptRefreshToken, exchangeDriveCode, fetchDrive
 
 export const dynamic = "force-dynamic";
 
-function returnToUpload(siteUrl: string, result: "connected" | "failed" | "consent-required"): NextResponse {
-  const response = NextResponse.redirect(new URL(`/upload?drive=${result}`, siteUrl));
+function returnToLibrary(siteUrl: string, result: "connected" | "failed" | "consent-required"): NextResponse {
+  const response = NextResponse.redirect(new URL(`/library?drive=${result}`, siteUrl));
   const secure = siteUrl.startsWith("https://");
   for (const name of ["pixzer-drive-oauth-state", "pixzer-drive-oauth-verifier"]) {
     response.cookies.set(name, "", { httpOnly: true, secure, sameSite: "lax", path: "/api/drive/callback", maxAge: 0 });
@@ -30,12 +30,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!user || !config || !isGoogleDriveSelectedAndEnabled() ||
       !equalOAuthState(expectedState, state) || !verifier || !code ||
       request.nextUrl.searchParams.has("error")) {
-    return returnToUpload(siteUrl, "failed");
+    return returnToLibrary(siteUrl, "failed");
   }
 
   try {
     const supabase = createPrivilegedSupabaseClient();
-    if (!supabase) return returnToUpload(siteUrl, "failed");
+    if (!supabase) return returnToLibrary(siteUrl, "failed");
     const token = await exchangeDriveCode(config, code, verifier);
     const about = await fetchDriveAbout(token.access_token);
     const { data: previous } = await supabase
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         .gt("expires_at", new Date().toISOString());
       if (error || uploadError || (count ?? 0) > 0 || (activeUploadCount ?? 0) > 0) {
         await revokeDriveToken(token.refresh_token ?? token.access_token);
-        return returnToUpload(siteUrl, "failed");
+        return returnToLibrary(siteUrl, "failed");
       }
     }
 
@@ -69,14 +69,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       : null);
     if (!refreshToken) {
       await revokeDriveToken(token.access_token);
-      return returnToUpload(siteUrl, "consent-required");
+      return returnToLibrary(siteUrl, "consent-required");
     }
 
     const refreshedAccessToken = await refreshDriveAccessToken(config, refreshToken);
     const refreshedAbout = await fetchDriveAbout(refreshedAccessToken);
     if (refreshedAbout.permissionId !== about.permissionId) {
       await revokeDriveToken(token.refresh_token ?? token.access_token);
-      return returnToUpload(siteUrl, "failed");
+      return returnToLibrary(siteUrl, "failed");
     }
 
     const encrypted = encryptRefreshToken(refreshToken, config.encryptionKey);
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }, { onConflict: "user_id" });
     if (error) {
       if (token.refresh_token) await revokeDriveToken(token.refresh_token);
-      return returnToUpload(siteUrl, "failed");
+      return returnToLibrary(siteUrl, "failed");
     }
 
     if (previous?.drive_permission_id && previous.drive_permission_id !== about.permissionId &&
@@ -103,8 +103,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    return returnToUpload(siteUrl, "connected");
+    return returnToLibrary(siteUrl, "connected");
   } catch {
-    return returnToUpload(siteUrl, "failed");
+    return returnToLibrary(siteUrl, "failed");
   }
 }

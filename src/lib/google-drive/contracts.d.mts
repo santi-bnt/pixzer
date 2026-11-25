@@ -7,6 +7,11 @@ export type DriveUploadValidation = { fileName: string; title: string; sizeBytes
 export function validateDriveGameUpload(input: unknown): DriveUploadValidation | null;
 export function nextDriveChunkRange(offset: number, totalBytes: number, chunkBytes?: number): {start:number;end:number;length:number;contentRange:string}|null;
 export function parseDriveUploadOffset(rangeHeader: string|null, totalBytes: number): number|null;
+export function selectPersistedDriveUploadCapability(claimed: unknown, winner: unknown, now?: number): {
+  ciphertext: string;
+  nonce: string;
+  tag: string;
+} | null;
 export function isDriveFileMetadata(value: unknown, expectedSize: number): boolean;
 export function isDriveOwnedUploadMetadata(value: unknown, expected: {
   sizeBytes: number;
@@ -23,4 +28,5 @@ export function isOwnedDriveGameMetadata(value: unknown, expected: {
   permissionId: string;
   fileId: string;
   providerChecksum?: string | null;
+  requireCanDownload?: boolean;
 }): boolean;

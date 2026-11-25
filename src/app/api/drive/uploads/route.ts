@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getAuthorizedUser } from "@/lib/supabase/user";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
 import { decryptDriveSecret, encryptDriveSecret } from "@/lib/google-drive/crypto.mjs";
-import { validateDriveGameUpload } from "@/lib/google-drive/contracts.mjs";
-import { decryptRefreshToken, driveApiRequest, getGoogleDriveConfig, isGoogleDriveSelectedAndEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
+import { selectPersistedDriveUploadCapability, validateDriveGameUpload } from "@/lib/google-drive/contracts.mjs";
+import { decryptRefreshToken, driveApiRequest, getGoogleDriveConfig, areDriveUploadsEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
 import { isJsonRequest, isSameOriginMutation } from "@/lib/r2/route-security";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!isJsonRequest(request)) return privateJson({ error: "invalid-request" }, 415);
   const user = await getAuthorizedUser();
   if (!user) return privateJson({ error: "invited-account-required" }, 401);
-  if (!isGoogleDriveSelectedAndEnabled()) return privateJson({ error: "drive-storage-disabled" }, 503);
+  if (!areDriveUploadsEnabled()) return privateJson({ error: "drive-storage-disabled" }, 503);
 
   const config = getGoogleDriveConfig();
   const supabase = createPrivilegedSupabaseClient();
@@ -60,9 +60,13 @@ export async function POST(request: Request): Promise<Response> {
       return privateJson({ completed: true, gameId: row.reserved_game_id }, 200);
     }
 
-    const { data: existing } = await supabase.from("drive_upload_sessions")
+    const { data: existing, error: existingError } = await supabase.from("drive_upload_sessions")
       .select("resumable_uri_ciphertext, resumable_uri_nonce, resumable_uri_tag, expires_at")
       .eq("id", row.reserved_upload_id).eq("user_id", user.id).maybeSingle();
+    if (existingError || !existing || Date.parse(existing.expires_at) <= Date.now() ||
+        (row.reserved_status !== "pending" && row.reserved_status !== "uploading")) {
+      return privateJson({ error: "drive-upload-unavailable" }, 410);
+    }
     let sessionUrl: string | null = null;
     if (existing?.resumable_uri_ciphertext && existing.resumable_uri_nonce && existing.resumable_uri_tag) {
       sessionUrl = decryptDriveSecret({
@@ -107,14 +111,35 @@ export async function POST(request: Request): Promise<Response> {
       }
       sessionUrl = location;
       const encrypted = encryptDriveSecret(location, config.encryptionKey);
-      const { error: updateError } = await supabase.from("drive_upload_sessions").update({
+      const { data: claimed, error: updateError } = await supabase.from("drive_upload_sessions").update({
         resumable_uri_ciphertext: encrypted.ciphertext,
         resumable_uri_nonce: encrypted.nonce,
         resumable_uri_tag: encrypted.tag,
         status: "uploading",
         updated_at: new Date().toISOString(),
-      }).eq("id", row.reserved_upload_id).eq("user_id", user.id).eq("status", "pending");
+      }).eq("id", row.reserved_upload_id).eq("user_id", user.id).eq("status", "pending")
+        .is("resumable_uri_ciphertext", null)
+        .select("resumable_uri_ciphertext, resumable_uri_nonce, resumable_uri_tag")
+        .maybeSingle();
       if (updateError) return privateJson({ error: "drive-upload-session-save-failed" }, 503);
+      if (claimed) {
+        const storedCapability = selectPersistedDriveUploadCapability(
+          { ...claimed, expires_at: existing.expires_at }, null,
+        );
+        if (!storedCapability) return privateJson({ error: "drive-upload-session-save-failed" }, 503);
+        sessionUrl = decryptDriveSecret({ version: 1, ...storedCapability }, config.encryptionKey);
+      } else {
+        // A concurrent retry may have won the reservation. Return only its
+        // persisted capability; never expose this request's uncommitted URI.
+        const { data: winner, error: winnerError } = await supabase.from("drive_upload_sessions")
+          .select("resumable_uri_ciphertext, resumable_uri_nonce, resumable_uri_tag, status, expires_at")
+          .eq("id", row.reserved_upload_id).eq("user_id", user.id).maybeSingle();
+        const storedCapability = selectPersistedDriveUploadCapability(null, winner);
+        if (winnerError || !storedCapability) {
+          return privateJson({ error: "drive-upload-session-save-failed" }, 503);
+        }
+        sessionUrl = decryptDriveSecret({ version: 1, ...storedCapability }, config.encryptionKey);
+      }
     }
 
     return privateJson({

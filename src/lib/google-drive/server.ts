@@ -12,8 +12,13 @@ export type GoogleDriveConfig = {
 };
 
 export function isGoogleDriveSelectedAndEnabled(): boolean {
-  return process.env.PIXZER_GAME_STORAGE_PROVIDER === "google_drive" &&
+  return (process.env.PIXZER_GAME_STORAGE_PROVIDER ?? "google_drive") === "google_drive" &&
     process.env.PIXZER_GOOGLE_DRIVE_ENABLED === "true";
+}
+
+export function areDriveUploadsEnabled(): boolean {
+  return isGoogleDriveSelectedAndEnabled() &&
+    process.env.PIXZER_GOOGLE_DRIVE_UPLOADS_ENABLED === "true";
 }
 
 export function getGoogleDriveConfig(): GoogleDriveConfig | null {

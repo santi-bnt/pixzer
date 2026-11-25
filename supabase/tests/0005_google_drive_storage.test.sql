@@ -1,7 +1,7 @@
 -- Proposal-only integration assertions. Run after migration 0004 in a dedicated
 -- development database. No fixtures are inserted or changed by this suite.
 begin;
-select plan(32);
+select plan(33);
 
 select has_table('public', 'drive_connections', 'Drive connection table exists');
 select has_table('public', 'drive_upload_sessions', 'Drive upload reservations exist');
@@ -55,6 +55,7 @@ select is((select completed_game_id from public.complete_drive_game_upload(
   'drive-file-a', 600000000, '0123456789abcdef0123456789abcdef'
 )), (select reserved_game_id from drive_test_upload_a), 'owner A completion creates the reserved game');
 select ok((select sha256 is null and provider_checksum = '0123456789abcdef0123456789abcdef' from public.games where id = (select reserved_game_id from drive_test_upload_a)), 'Drive metadata uses provider checksum instead of trusting browser SHA-256');
+select throws_ok($$insert into public.games (id, user_id, title, console, file_name, object_key, size_bytes, sha256, storage_provider, provider_file_id, provider_account_id, provider_checksum) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'Missing checksum', 'gb', 'missing.gb', 'google-drive/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/missing', 1, null, 'google_drive', 'missing-file', 'drive-owner-a', null)$$, '23514', null, 'Drive game rows reject a missing provider checksum');
 select throws_ok($$select * from public.complete_drive_game_upload('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', (select reserved_upload_id from drive_test_upload_a), 'drive-file-a', 600000000, 'not-a-checksum')$$, '22023', null, 'malformed provider checksum is rejected');
 
 set local role authenticated;

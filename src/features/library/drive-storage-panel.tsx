@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Notice } from "@/components/ui";
 import { DriveUploadForm } from "@/features/library/drive-upload-form";
 
 type DriveStatus = {
@@ -31,9 +30,13 @@ function formatSize(value: number): string {
 export function DriveStoragePanel({
   enabled,
   oauthResult,
+  showUpload = false,
+  uploadsEnabled = false,
 }: {
   enabled: boolean;
   oauthResult?: "connected" | "failed" | "consent-required";
+  showUpload?: boolean;
+  uploadsEnabled?: boolean;
 }) {
   const [status, setStatus] = useState<DriveStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -71,10 +74,6 @@ export function DriveStoragePanel({
     }
   }
 
-  if (!enabled) {
-    return <Notice title="Google Drive storage is not configured" body="OAuth credentials, encrypted-token configuration, and the reviewed database migration are still required. R2 remains disabled unless separately configured." />;
-  }
-
   return (
     <section className="panel mx-auto max-w-3xl space-y-4 rounded-3xl p-5 sm:p-8" aria-labelledby="drive-storage-heading">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -82,16 +81,21 @@ export function DriveStoragePanel({
           <h2 className="text-lg font-semibold" id="drive-storage-heading">Your Google Drive</h2>
           <p className="mt-1 text-sm text-muted">Files stay in the Drive account you connect. pixzer requests access only to files it creates.</p>
         </div>
-        {status?.connected ? (
+        {!enabled || status?.configured === false ? (
+          <button className="min-h-11 rounded-xl border border-token px-4 text-sm font-semibold text-muted" type="button" disabled>
+            Connect Google Drive
+          </button>
+        ) : status?.connected ? (
           <button className="min-h-11 rounded-xl border border-token px-4 text-sm font-semibold" disabled={busy} onClick={() => void disconnect()} type="button">
             {busy ? "Disconnecting…" : "Disconnect Drive"}
           </button>
-        ) : (
+        ) : status && !status.reauthorizationRequired ? (
           <a className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-[var(--accent-contrast)]" href="/api/drive/connect">
             Connect Google Drive
           </a>
-        )}
+        ) : null}
       </div>
+      {(!enabled || status?.configured === false) && <p className="text-sm text-muted">Drive connection is currently unavailable.</p>}
       {message && <p className="text-sm text-muted" role="status">{message}</p>}
       {oauthResult === "connected" && status?.connected && <p className="notice-success text-sm" role="status">Google Drive is connected to this pixzer account.</p>}
       {oauthResult === "failed" && <p className="notice-error text-sm" role="alert">Drive could not connect. Check the authorized Google test account and OAuth callback settings, then try again.</p>}
@@ -112,8 +116,9 @@ export function DriveStoragePanel({
           <p className="mt-1 text-xs text-subtle">pixzer also enforces a 900 MB game-library limit. Drive space is shared with your other Google services.</p>
         </div>
       )}
-      {status?.connected && <DriveUploadForm onUploaded={refresh} />}
-      {status === null && <p className="text-sm text-muted" aria-live="polite">Checking Drive connection…</p>}
+      {showUpload && !uploadsEnabled && <p className="text-sm text-muted">Game uploads are currently disabled.</p>}
+      {showUpload && uploadsEnabled && status?.connected && <DriveUploadForm onUploaded={refresh} />}
+      {enabled && status === null && <p className="text-sm text-muted" aria-live="polite">Checking Drive connection…</p>}
     </section>
   );
 }

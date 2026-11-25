@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedUser } from "@/lib/supabase/user";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
-import { decryptRefreshToken, driveApiRequest, getGoogleDriveConfig, isGoogleDriveSelectedAndEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
+import { decryptRefreshToken, driveApiRequest, getGoogleDriveConfig, areDriveUploadsEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
 import { isDriveOwnedUploadMetadata } from "@/lib/google-drive/contracts.mjs";
 import { isSameOriginMutation, isJsonRequest } from "@/lib/r2/route-security";
 import { isValidUploadId } from "@/lib/r2/upload-validation.mjs";
@@ -13,7 +13,7 @@ export async function POST(request: Request, context: { params: Promise<{ upload
   if (!isJsonRequest(request)) return NextResponse.json({ error: "invalid-request" }, { status: 415 });
   const user = await getAuthorizedUser();
   if (!user) return NextResponse.json({ error: "invited-account-required" }, { status: 401 });
-  if (!isGoogleDriveSelectedAndEnabled()) return NextResponse.json({ error: "drive-storage-disabled" }, { status: 503 });
+  if (!areDriveUploadsEnabled()) return NextResponse.json({ error: "drive-storage-disabled" }, { status: 503 });
   const { uploadId } = await context.params;
   if (!isValidUploadId(uploadId)) return NextResponse.json({ error: "upload-unavailable" }, { status: 404 });
   const body: unknown = await request.json().catch(() => null);
