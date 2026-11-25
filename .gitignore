@@ -12,6 +12,8 @@ coverage/
 *.tsbuildinfo
 playwright-report/
 test-results/
+.playwright-mcp/
+/artifacts/
 *.rom
 *.gb
 *.gbc
