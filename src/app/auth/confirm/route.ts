@@ -1,7 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSafeAuthNextPath } from "@/features/auth/fragment-flow.mjs";
-import { mapOAuthProviderError } from "@/features/auth/oauth-error-flow.mjs";
+import { mapOAuthCodeExchangeError, mapOAuthProviderError } from "@/features/auth/oauth-error-flow.mjs";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       const isOAuthCodeFlow = !url.searchParams.has("type");
       return redirectTo(request, isOAuthCodeFlow
-        ? "/login?error=oauth-session-failed"
+        ? `/login?error=${mapOAuthCodeExchangeError(error.code ?? null)}`
         : "/login?error=invalid-link");
     }
 
