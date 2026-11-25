@@ -90,7 +90,7 @@ function AdvanceIllustration() {
   return (
     <svg aria-hidden="true" className="h-full w-full" viewBox="0 0 240 210" fill="none">
       <g transform="translate(7 0) scale(.94 1)">
-      <path d="M45 68c0-13 9-21 23-23l13-2h78l13 2c14 2 23 10 23 23v53c0 12-8 20-21 23l-15 4-14-9H92l-14 9-15-4c-13-3-18-11-18-23V68Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
+      <path d="M65 45c-13 1-21 10-21 23v53c0 12 7 19 19 22l16 4c8 2 14 0 20-5l7-7h28l7 7c6 5 12 7 20 5l16-4c12-3 19-10 19-22V68c0-13-8-22-21-23l-15-3H80l-15 3Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
       <path d="M68 49c2-5 6-8 12-8h80c6 0 10 3 12 8l4 42H64l4-42Z" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
       <rect x="73" y="55" width="94" height="32" rx="3" fill="#222923" />
       <path d="M80 62h80M80 69h80M80 76h80M80 83h80" stroke="#A6C39D" strokeOpacity=".38" strokeWidth="1" />
