@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Brand } from "@/components/ui";
+import { AppFooter } from "@/components/app-footer";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 import { getAuthorizedUser } from "@/lib/supabase/user";
 
@@ -75,7 +76,7 @@ export async function AppShell({
           </div>
         </div>
       </aside>
-      <div className="lg:pl-64">
+      <div className="pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0 lg:pl-64">
         <header className="flex h-16 items-center justify-between border-b border-token px-5 sm:px-8">
           <div className="lg:hidden">
             <a href="/library">
@@ -105,6 +106,7 @@ export async function AppShell({
         <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
           {children}
         </main>
+        <AppFooter />
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-token bg-background-secondary/95 px-2 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:hidden">
         {nav.slice(0, 4).map(([label, href, icon]) => (

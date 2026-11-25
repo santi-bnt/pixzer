@@ -1,4 +1,5 @@
 import { Brand, Button } from "@/components/ui";
+import { AppFooter } from "@/components/app-footer";
 import { ConsolePlatformShowcase } from "@/components/console-platform-showcase";
 import { AppearanceSelect } from "@/features/appearance/theme-provider";
 import Link from "next/link";
@@ -74,9 +75,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <footer className="border-t border-token px-6 py-6 text-center text-xs text-subtle">
-        pixzer · Early access foundation · No games or firmware included
-      </footer>
+      <AppFooter />
     </main>
   );
 }
