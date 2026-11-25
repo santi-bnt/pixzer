@@ -38,27 +38,16 @@ const platforms: {
   },
 ];
 
-function GameBoyIllustration({ color }: { color: boolean }) {
+function GameBoyIllustration() {
   return (
     <svg aria-hidden="true" className="h-full w-full" viewBox="0 0 240 210" fill="none">
       <path d="M76 8h88c9 0 15 7 16 16l8 153c1 15-7 24-22 25H73c-15-1-22-9-21-24l8-154c1-10 7-16 16-16Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
       <path d="M70 19h100" stroke="var(--line)" strokeWidth="2" />
       <rect x="72" y="26" width="96" height="77" rx="7" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
-      <rect x="81" y="35" width="78" height="59" rx="3" fill={color ? "#263938" : "#232923"} />
-      {color ? (
-        <>
-          <path d="M87 47h66M87 56h66M87 65h66M87 74h66M87 83h66" stroke="#8BB8AA" strokeOpacity=".48" strokeWidth="1" />
-          <rect x="91" y="47" width="13" height="5" rx="2.5" fill="#E94B50" />
-          <rect x="108" y="56" width="19" height="5" rx="2.5" fill="#71B9D1" />
-          <rect x="132" y="65" width="13" height="5" rx="2.5" fill="#F3C46B" />
-        </>
-      ) : (
-        <>
-          <path d="M87 47h66M87 56h66M87 65h66M87 74h66M87 83h66" stroke="#A9C39F" strokeOpacity=".52" strokeWidth="1" />
-          <rect x="91" y="56" width="18" height="5" rx="2.5" fill="#A9C39F" />
-          <rect x="114" y="65" width="28" height="5" rx="2.5" fill="#C3D2B4" />
-        </>
-      )}
+      <rect x="81" y="35" width="78" height="59" rx="3" fill="#232923" />
+      <path d="M87 47h66M87 56h66M87 65h66M87 74h66M87 83h66" stroke="#A9C39F" strokeOpacity=".52" strokeWidth="1" />
+      <rect x="91" y="56" width="18" height="5" rx="2.5" fill="#A9C39F" />
+      <rect x="114" y="65" width="28" height="5" rx="2.5" fill="#C3D2B4" />
       <path d="M76 115h88" stroke="var(--line)" strokeWidth="1.5" />
       <path d="M82 142h34v10h-12v12H94v-12H82z" fill="var(--text)" />
       <circle cx="148" cy="140" r="10" fill="var(--accent)" />
@@ -78,24 +67,42 @@ function GameBoyIllustration({ color }: { color: boolean }) {
   );
 }
 
+function GameBoyColorIllustration() {
+  return (
+    <svg aria-hidden="true" className="h-full w-full" viewBox="0 0 240 210" fill="none">
+      <path d="M78 10h84c15 0 25 10 27 25l8 129c2 21-8 33-29 34H72c-20-1-29-13-27-33l8-131c1-14 10-24 25-24Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
+      <path d="M69 26c2-7 7-11 15-11h72c8 0 13 4 15 11" stroke="var(--line)" strokeWidth="2" />
+      <path d="M70 31h100c5 0 8 3 9 8l3 59H66l3-59c0-5 3-8 8-8Z" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
+      <rect x="78" y="39" width="84" height="50" rx="3" fill="#263938" />
+      <path d="M84 49h72M84 57h72M84 65h72M84 73h72M84 81h72" stroke="#8BB8AA" strokeOpacity=".48" strokeWidth="1" />
+      <path d="M91 51h15v5H91z" fill="#E94B50" /><path d="M112 59h21v5h-21z" fill="#71B9D1" /><path d="M137 67h14v5h-14z" fill="#F3C46B" />
+      <path d="M68 103h104" stroke="var(--line)" strokeWidth="1.5" />
+      <path d="M76 133h34v10H98v12H88v-12H76z" fill="var(--text)" />
+      <circle cx="148" cy="131" r="9" fill="var(--accent)" /><circle cx="163" cy="143" r="9" fill="var(--text)" />
+      <circle cx="148" cy="131" r="12" stroke="var(--line-strong)" strokeWidth="1.5" /><circle cx="163" cy="143" r="12" stroke="var(--line-strong)" strokeWidth="1.5" />
+      <path d="M93 169h18m17 0h18" stroke="var(--muted)" strokeLinecap="round" strokeWidth="4" />
+      <g fill="var(--line-strong)"><circle cx="151" cy="169" r="1.4"/><circle cx="158" cy="167" r="1.4"/><circle cx="165" cy="165" r="1.4"/><circle cx="153" cy="175" r="1.4"/><circle cx="160" cy="173" r="1.4"/><circle cx="167" cy="171" r="1.4"/></g>
+    </svg>
+  );
+}
+
 function AdvanceIllustration() {
   return (
     <svg aria-hidden="true" className="h-full w-full" viewBox="0 0 240 210" fill="none">
-      <path d="M31 56c4-10 13-16 25-17l126-8c13-1 22 5 25 18l13 74c3 15-4 26-19 29l-139 15c-15 2-25-5-29-19l-9-70c-1-8 1-15 7-22Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
-      <path d="m63 48 116-7 8 57-115 10z" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
-      <rect x="75" y="55" width="99" height="45" rx="3" fill="#222923" />
-      <path d="M83 66h83M83 74h83M83 82h83M83 90h83" stroke="#A6C39D" strokeOpacity=".38" strokeWidth="1" />
-      <path d="M92 60v31M104 60v31M116 60v31M128 60v31M140 60v31M152 60v31" stroke="#A6C39D" strokeOpacity=".22" strokeWidth="1" />
-      <path d="M86 94h76" stroke="#A6C39D" strokeWidth="2" />
-      <path d="M39 124h37v11H63v13H52v-13H39z" fill="var(--text)" />
-      <circle cx="172" cy="119" r="11" fill="var(--accent)" stroke="var(--line-strong)" strokeWidth="2" />
-      <circle cx="192" cy="132" r="11" fill="var(--text)" stroke="var(--line-strong)" strokeWidth="2" />
-      <text x="172" y="122" textAnchor="middle" fontSize="6" fontWeight="700" fill="var(--accent-contrast)">A</text>
-      <text x="192" y="135" textAnchor="middle" fontSize="6" fontWeight="700" fill="var(--accent-contrast)">B</text>
-      <rect x="100" y="122" width="21" height="5" rx="2.5" fill="var(--muted)" />
-      <rect x="128" y="120" width="21" height="5" rx="2.5" fill="var(--muted)" />
-      <path d="m55 58 14-2M184 53l12-1" stroke="var(--line-strong)" strokeLinecap="round" strokeWidth="3" />
-      <circle cx="56" cy="73" r="2.5" fill="var(--accent)" />
+      <g transform="translate(7 0) scale(.94 1)">
+      <path d="M45 68c0-13 9-21 23-23l13-2h78l13 2c14 2 23 10 23 23v53c0 12-8 20-21 23l-15 4-14-9H92l-14 9-15-4c-13-3-18-11-18-23V68Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
+      <path d="M68 49c2-5 6-8 12-8h80c6 0 10 3 12 8l4 42H64l4-42Z" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
+      <rect x="73" y="55" width="94" height="32" rx="3" fill="#222923" />
+      <path d="M80 62h80M80 69h80M80 76h80M80 83h80" stroke="#A6C39D" strokeOpacity=".38" strokeWidth="1" />
+      <path d="M85 89h70" stroke="#A6C39D" strokeWidth="2" />
+      <path d="M57 111h35v10H79v13H69v-13H57z" fill="var(--text)" />
+      <circle cx="168" cy="108" r="9" fill="var(--accent)" stroke="var(--line-strong)" strokeWidth="1.5" /><circle cx="183" cy="120" r="9" fill="var(--text)" stroke="var(--line-strong)" strokeWidth="1.5" />
+      <circle cx="168" cy="108" r="11" stroke="var(--line)" /><circle cx="183" cy="120" r="11" stroke="var(--line)" />
+      <text x="168" y="111" textAnchor="middle" fontSize="6" fontWeight="700" fill="var(--accent-contrast)">A</text><text x="183" y="123" textAnchor="middle" fontSize="6" fontWeight="700" fill="var(--accent-contrast)">B</text>
+      <path d="M99 121h17m13 0h17" stroke="var(--muted)" strokeLinecap="round" strokeWidth="4" />
+      <path d="M57 52h12m102 0h12" stroke="var(--line-strong)" strokeLinecap="round" strokeWidth="3" />
+      <circle cx="67" cy="107" r="2.5" fill="var(--accent)" />
+      </g>
     </svg>
   );
 }
@@ -103,23 +110,17 @@ function AdvanceIllustration() {
 function DualScreenIllustration() {
   return (
     <svg aria-hidden="true" className="h-full w-full" viewBox="0 0 240 210" fill="none">
-      <path d="M64 8h112c11 0 18 7 19 18l5 64c1 11-7 19-18 20l-121 3c-11 0-18-7-18-18l3-68c0-12 7-19 18-19Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
-      <rect x="73" y="20" width="94" height="67" rx="5" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
-      <rect x="81" y="27" width="78" height="52" rx="2" fill="#252B29" />
-      <path d="M87 39h66M87 48h66M87 57h66M87 66h66" stroke="#9FB9A1" strokeOpacity=".36" strokeWidth="1" />
-      <path d="M89 73h62" stroke="#9FB9A1" strokeWidth="2" />
-      <circle cx="120" cy="96" r="3" fill="var(--line-strong)" />
-      <path d="M43 108c1-11 8-18 19-19l116-5c12-1 19 6 20 18l4 69c1 12-7 20-19 20H59c-12 0-19-8-19-20l3-63Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
-      <rect x="73" y="103" width="94" height="55" rx="4" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
-      <rect x="80" y="110" width="80" height="42" rx="2" fill="#252B29" />
-      <path d="M86 120h68M86 128h68M86 136h68" stroke="#9FB9A1" strokeOpacity=".34" strokeWidth="1" />
-      <path d="M88 145h64" stroke="#9FB9A1" strokeWidth="2" />
-      <path d="M53 165h30v9H72v11h-9v-11H53z" fill="var(--text)" />
-      <circle cx="164" cy="166" r="6" fill="var(--accent)" />
-      <circle cx="179" cy="158" r="6" fill="var(--text)" />
-      <circle cx="179" cy="174" r="6" fill="var(--text)" />
-      <circle cx="194" cy="166" r="6" fill="var(--accent)" />
-      <circle cx="192" cy="185" r="2" fill="var(--line-strong)" />
+      <path d="M68 8h104c13 0 21 8 22 21l4 54c1 13-7 21-20 22l-116 2c-13 0-20-8-20-20l3-58C46 16 54 8 68 8Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
+      <rect x="72" y="18" width="96" height="68" rx="5" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
+      <rect x="80" y="25" width="80" height="54" rx="2" fill="#252B29" />
+      <path d="M86 37h68M86 46h68M86 55h68M86 64h68" stroke="#9FB9A1" strokeOpacity=".36" strokeWidth="1" /><path d="M88 73h64" stroke="#9FB9A1" strokeWidth="2" />
+      <path d="M45 93h150" stroke="var(--line-strong)" strokeWidth="4" strokeLinecap="round" /><path d="M54 94v5m132-5v5" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="120" cy="95" r="2.5" fill="var(--accent)" />
+      <path d="M48 105c1-9 8-15 17-16l110-2c10 0 17 6 18 16l3 69c1 11-6 18-17 18H61c-11 0-18-7-18-18l3-67Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
+      <rect x="72" y="105" width="96" height="54" rx="4" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" /><rect x="80" y="112" width="80" height="40" rx="2" fill="#252B29" />
+      <path d="M86 121h68M86 129h68M86 137h68" stroke="#9FB9A1" strokeOpacity=".34" strokeWidth="1" /><path d="M88 145h64" stroke="#9FB9A1" strokeWidth="2" />
+      <path d="M54 166h30v8H72v11h-8v-11H54z" fill="var(--text)" /><circle cx="166" cy="166" r="6" fill="var(--accent)" /><circle cx="180" cy="159" r="5.5" fill="var(--text)" /><circle cx="180" cy="173" r="5.5" fill="var(--text)" /><circle cx="194" cy="166" r="6" fill="var(--accent)" />
+      <circle cx="188" cy="185" r="2" fill="var(--line-strong)" />
     </svg>
   );
 }
@@ -127,32 +128,28 @@ function DualScreenIllustration() {
 function N64Illustration() {
   return (
     <svg aria-hidden="true" className="h-full w-full" viewBox="0 0 240 210" fill="none">
-      <g transform="translate(-12 -15) scale(1.1 1.18)">
-      <path d="M28 42c0-10 7-17 17-17h69c10 0 17 7 17 17v47c0 11-7 18-18 18H46c-11 0-18-7-18-18V42Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
-      <path d="M39 37c0-4 3-7 7-7h67c4 0 7 3 7 7v40H39V37Z" fill="var(--surface)" stroke="var(--line)" strokeWidth="2" />
-      <rect x="66" y="38" width="28" height="5" rx="2.5" fill="var(--background-secondary)" stroke="var(--line)" />
-      <path d="M39 83h92v11H39z" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
-      <path d="M48 88v3M67 88v3M86 88v3M105 88v3M124 88v3" stroke="var(--line-strong)" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="113" cy="53" r="3" fill="var(--accent)" />
-      <path d="M153 92c-4-9 1-18 10-20l11-3c9-2 16 3 20 12 4-9 11-14 20-11l8 2c9 2 13 11 10 20l-7 20c-3 8-10 11-17 7l-11-7-3 23c-1 9-9 14-17 9l-7-4-6-24-10 8c-8 6-16 1-19-8l-5-15c-3-9 4-16 13-9Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
-      <path d="M153 96h24v8h-8v8h-8v-8h-8z" fill="var(--text)" />
-      <circle cx="184" cy="112" r="7" fill="var(--muted)" stroke="var(--line-strong)" strokeWidth="1.5" />
-      <path d="M205 96v14M198 103h14" stroke="var(--text)" strokeWidth="2.5" strokeLinecap="round" />
-      <circle cx="218" cy="91" r="3.5" fill="var(--accent)" />
-      <circle cx="226" cy="99" r="3.5" fill="var(--accent)" />
-      <circle cx="217" cy="107" r="3.5" fill="var(--accent)" />
-      <circle cx="209" cy="99" r="3.5" fill="var(--accent)" />
-      <circle cx="193" cy="87" r="2.5" fill="var(--text)" />
-      <circle cx="201" cy="89" r="2.5" fill="var(--text)" />
-      <rect x="181" y="121" width="9" height="3" rx="1.5" fill="var(--muted)" />
-      </g>
+      <ellipse cx="120" cy="98" rx="57" ry="8" fill="var(--line)" opacity=".45" />
+      <path d="M69 17c0-7 5-11 12-11h78c7 0 12 4 12 11v9c12 2 20 11 21 23l3 29c1 14-7 22-21 23H66c-14-1-22-9-21-23l3-29c1-12 9-21 21-23v-9Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
+      <path d="M78 19c0-3 2-5 5-5h74c3 0 5 2 5 5v11H78V19Z" fill="var(--surface)" stroke="var(--line)" strokeWidth="1.5" />
+      <path d="M71 33h98c7 0 12 5 13 12l2 28H56l2-28c1-7 6-12 13-12Z" fill="var(--background-secondary)" stroke="var(--line)" strokeWidth="2" />
+      <path d="M80 40h80c4 0 7 3 7 7v19H73V47c0-4 3-7 7-7Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="1.5" />
+      <path d="M88 47h64v12H88z" fill="var(--background-secondary)" stroke="var(--line)" />
+      <circle cx="166" cy="49" r="3" fill="var(--accent)" /><path d="M81 79h78" stroke="var(--line-strong)" strokeWidth="2" />
+      <path d="M69 85h102" stroke="var(--line-strong)" strokeWidth="2.5" strokeLinecap="round" />
+      <rect x="74" y="87" width="15" height="5" rx="2.5" fill="var(--muted)" /><rect x="96" y="87" width="15" height="5" rx="2.5" fill="var(--muted)" /><rect x="118" y="87" width="15" height="5" rx="2.5" fill="var(--muted)" /><rect x="140" y="87" width="15" height="5" rx="2.5" fill="var(--muted)" />
+      <path d="M54 125c0-8 6-13 14-13h21c8 0 14 5 17 13l5 17 6-24c2-8 8-12 16-12h10c8 0 14 5 16 13l6 23 5-17c3-8 9-13 17-13h16c9 0 15 6 15 14 0 4-2 8-5 11l-15 15c-5 5-12 7-19 4l-22-9-8 22c-3 8-9 12-17 12h-9c-8 0-14-4-17-12l-8-22-22 9c-7 3-14 1-19-4l-15-15c-4-3-6-8-6-12Z" fill="var(--surface-raised)" stroke="var(--line-strong)" strokeWidth="2.5" />
+      <path d="M61 126h24v8h-8v8h-8v-8h-8z" fill="var(--text)" />
+      <circle cx="124" cy="130" r="12" fill="var(--background-secondary)" stroke="var(--line-strong)" strokeWidth="2" /><circle cx="124" cy="130" r="6" fill="var(--muted)" />
+      <circle cx="172" cy="127" r="5.5" fill="var(--accent)" /><circle cx="186" cy="136" r="5.5" fill="var(--accent)" /><circle cx="172" cy="145" r="5.5" fill="var(--accent)" /><circle cx="158" cy="136" r="5.5" fill="var(--accent)" />
+      <circle cx="147" cy="117" r="2.5" fill="var(--text)" /><circle cx="156" cy="117" r="2.5" fill="var(--text)" />
+      <path d="M110 159h28l-4 7h-20z" fill="var(--muted)" />
     </svg>
   );
 }
 
 function ConsoleIllustration({ id }: { id: ConsoleId }) {
-  if (id === "gb") return <GameBoyIllustration color={false} />;
-  if (id === "gbc") return <GameBoyIllustration color />;
+  if (id === "gb") return <GameBoyIllustration />;
+  if (id === "gbc") return <GameBoyColorIllustration />;
   if (id === "gba") return <AdvanceIllustration />;
   if (id === "nds") return <DualScreenIllustration />;
   return <N64Illustration />;
