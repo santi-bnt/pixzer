@@ -153,7 +153,7 @@ select is((select count(*)::integer from public.reserve_game_upload(
 -- after the server has verified the owner's Drive state.
 create temporary table drive_cleanup_fixture on commit drop as
 select * from public.reserve_drive_game_upload(
-  '14141414-1414-4141-8141-141414141414', 'cleanup.gb', 'Cleanup', 'gb', 900000000
+  '14141414-1414-4141-8141-141414141414', '18181818-1818-4181-8181-181818181818', 'cleanup.gb', 'Cleanup', 'gb', 900000000
 );
 update public.drive_upload_sessions
 set status = 'expired', expires_at = pg_catalog.now() - interval '8 days'
@@ -205,7 +205,7 @@ select is((select cleanup_attempts from public.drive_upload_sessions where id = 
 
 create temporary table drive_reconcile_fixture on commit drop as
 select * from public.reserve_drive_game_upload(
-  '16161616-1616-4161-8161-161616161616', 'reconcile.gb', 'Reconcile', 'gb', 1
+  '16161616-1616-4161-8161-161616161616', '17171717-1717-4171-8171-171717171717', 'reconcile.gb', 'Reconcile', 'gb', 1
 );
 update public.drive_upload_sessions
 set status = 'expired', expires_at = pg_catalog.now() - interval '8 days'

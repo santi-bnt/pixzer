@@ -34,7 +34,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          supabase --workdir "$SUPABASE_CI_WORKDIR" start
+          start_log="$RUNNER_TEMP/supabase-start.log"
+          if ! supabase --workdir "$SUPABASE_CI_WORKDIR" start >"$start_log" 2>&1; then
+            grep -E 'Applying migration|ERROR:|Error:|Failed|Started supabase local' "$start_log" || true
+            echo "Disposable local Supabase stack failed to start." >&2
+            exit 1
+          fi
+          echo "Disposable local Supabase stack started."
 
       - name: Apply the complete schema from zero
         shell: bash

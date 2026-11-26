@@ -92,7 +92,7 @@ from public.reserve_game_upload(
 );
 
 select is((select count(*)::integer from public.upload_sessions where user_id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'), 1, 'reservation creates exactly one pending upload');
-select like((select staging_object_key from upload_fixture), 'users/dddddddd-dddd-4ddd-8ddd-dddddddddddd/games/%/rom/original', 'reserved key is scoped below the authenticated owner prefix');
+select alike((select staging_object_key from upload_fixture), 'users/dddddddd-dddd-4ddd-8ddd-dddddddddddd/games/%/rom/original', 'reserved key is scoped below the authenticated owner prefix');
 
 select is((
   select reserved_upload_id
