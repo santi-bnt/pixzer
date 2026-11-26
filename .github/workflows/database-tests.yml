@@ -1,0 +1,85 @@
+name: Isolated database tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  database:
+    name: Supabase migrations, pgTAP, and quota races
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 3.4.0
+
+      - name: Prepare isolated migration workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          workdir="$(node scripts/prepare-supabase-ci.mjs)"
+          echo "SUPABASE_CI_WORKDIR=$workdir" >> "$GITHUB_ENV"
+
+      - name: Start disposable local Supabase stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          start_log="$RUNNER_TEMP/supabase-start.log"
+          if ! supabase --workdir "$SUPABASE_CI_WORKDIR" start >"$start_log" 2>&1; then
+            grep -E 'Applying migration|ERROR:|Error:|Failed|Started supabase local' "$start_log" || true
+            echo "Disposable local Supabase stack failed to start." >&2
+            exit 1
+          fi
+          echo "Disposable local Supabase stack started."
+
+      - name: Apply the complete schema from zero
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase --workdir "$SUPABASE_CI_WORKDIR" db reset --local --no-seed
+
+      - name: Run and verify all four pgTAP suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/pixzer-pgtap.log"
+          set +e
+          supabase --workdir "$SUPABASE_CI_WORKDIR" test db --local 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$status" -ne 0 ]]; then
+            echo "Supabase pgTAP failed; see complete output above." >&2
+            exit "$status"
+          fi
+          for suite in 0002_auth_rls.test.sql 0003_profile_provisioning.test.sql 0004_private_game_uploads.test.sql 0005_google_drive_storage.test.sql; do
+            if ! grep -E "${suite}.*\.\. ok$" "$log" >/dev/null; then
+              echo "Missing successful pgTAP suite: ${suite}" >&2
+              exit 1
+            fi
+          done
+          if ! grep -E 'Files=[[:space:]]*4,[[:space:]]*Tests=166' "$log" >/dev/null || ! grep -F 'Result: PASS' "$log" >/dev/null; then
+            echo "Expected four suites and 166 executed assertions; summary was absent or different." >&2
+            exit 1
+          fi
+
+      - name: Verify concurrent per-user and global quota enforcement
+        shell: bash
+        run: bash scripts/test-storage-quota-concurrency.sh "$SUPABASE_CI_WORKDIR"
+
+      - name: Stop disposable Supabase stack
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${SUPABASE_CI_WORKDIR:-}" ]]; then
+            supabase --workdir "$SUPABASE_CI_WORKDIR" stop --no-backup || true
+          fi

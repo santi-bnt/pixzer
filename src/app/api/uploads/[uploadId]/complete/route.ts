@@ -21,6 +21,13 @@ type UploadSessionRow = {
   expires_at: string;
 };
 
+type CompletedGameRow = {
+  id: string;
+  size_bytes: number | string;
+  sha256: string;
+  object_key: string;
+};
+
 function isUploadSessionRow(value: unknown): value is UploadSessionRow {
   if (typeof value !== "object" || value === null) return false;
   const row = value as Record<string, unknown>;
@@ -33,6 +40,15 @@ function isUploadSessionRow(value: unknown): value is UploadSessionRow {
     typeof row.status === "string" &&
     typeof row.expires_at === "string"
   );
+}
+
+function isCompletedGameRow(value: unknown): value is CompletedGameRow {
+  if (typeof value !== "object" || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.id === "string" &&
+    (typeof row.size_bytes === "number" || typeof row.size_bytes === "string") &&
+    typeof row.sha256 === "string" && /^[a-f0-9]{64}$/.test(row.sha256) &&
+    typeof row.object_key === "string";
 }
 
 function parseVerifiedResult(value: unknown): { gameId: string; sizeBytes: number } | null {
@@ -102,34 +118,46 @@ export async function POST(
       return privateJson({ error: "upload-unavailable" }, 404);
     }
 
-    if (data.status === "completed") {
-      return privateJson({ gameId: data.game_id, verified: true }, 200);
-    }
-    if (
-      (data.status !== "pending" && data.status !== "uploaded") ||
-      Date.parse(data.expires_at) <= Date.now() ||
-      !isOwnedGameObjectKey(data.object_key, user.id)
-    ) {
-      return privateJson({ error: "upload-expired" }, 410);
-    }
-
-    const expectedSizeBytes = Number(data.expected_size_bytes);
-    if (!Number.isSafeInteger(expectedSizeBytes) || expectedSizeBytes < 1) {
-      return privateJson({ error: "upload-unavailable" }, 404);
-    }
-
-    const r2 = createR2Client(r2Config);
     let verified: { sizeBytes: number; sha256: string };
-    try {
-      verified = await verifyStoredGameObject(
-        r2,
-        r2Config,
-        data.object_key,
-        expectedSizeBytes,
-      );
-    } catch {
-      // A failed HEAD/read is never treated as an uploaded game.
-      return privateJson({ error: "stored-file-not-confirmed" }, 409);
+    if (data.status === "completed") {
+      const { data: storedGame, error: gameError } = await supabase.from("games")
+        .select("id, size_bytes, sha256, object_key")
+        .eq("id", data.game_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (gameError || !isCompletedGameRow(storedGame) || storedGame.object_key !== data.object_key) {
+        return privateJson({ error: "upload-completion-unconfirmed" }, 503);
+      }
+      verified = { sizeBytes: Number(storedGame.size_bytes), sha256: storedGame.sha256 };
+      if (!Number.isSafeInteger(verified.sizeBytes) || verified.sizeBytes < 1) {
+        return privateJson({ error: "upload-completion-unconfirmed" }, 503);
+      }
+    } else {
+      if (
+        (data.status !== "pending" && data.status !== "uploaded") ||
+        Date.parse(data.expires_at) <= Date.now() ||
+        !isOwnedGameObjectKey(data.object_key, user.id)
+      ) {
+        return privateJson({ error: "upload-expired" }, 410);
+      }
+
+      const expectedSizeBytes = Number(data.expected_size_bytes);
+      if (!Number.isSafeInteger(expectedSizeBytes) || expectedSizeBytes < 1) {
+        return privateJson({ error: "upload-unavailable" }, 404);
+      }
+
+      const r2 = createR2Client(r2Config);
+      try {
+        verified = await verifyStoredGameObject(
+          r2,
+          r2Config,
+          data.object_key,
+          expectedSizeBytes,
+        );
+      } catch {
+        // A failed HEAD/read is never treated as an uploaded game.
+        return privateJson({ error: "stored-file-not-confirmed" }, 409);
+      }
     }
 
     const { data: completed, error: completeError } = await supabase.rpc(
@@ -152,7 +180,7 @@ export async function POST(
     }
 
     const result = parseVerifiedResult(completed);
-    if (!result || result.sizeBytes !== expectedSizeBytes) {
+    if (!result || result.gameId !== data.game_id || result.sizeBytes !== verified.sizeBytes) {
       return privateJson({ error: "upload-completion-unconfirmed" }, 503);
     }
 

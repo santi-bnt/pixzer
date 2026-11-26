@@ -94,6 +94,10 @@ async function requestToken(parameters: URLSearchParams): Promise<GoogleTokenRes
     cache: "no-store",
   });
   const result: unknown = await response.json().catch(() => null);
+  if (!response.ok && typeof result === "object" && result !== null &&
+      (result as Record<string, unknown>).error === "invalid_grant") {
+    throw new Error("google-drive-authorization-revoked");
+  }
   const token = parseTokenResponse(result);
   if (!response.ok || !token) throw new Error("google-drive-token-exchange-failed");
   return token;

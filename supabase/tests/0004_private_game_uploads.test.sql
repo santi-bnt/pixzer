@@ -1,7 +1,12 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(37);
+
+select ok((select prosecdef from pg_catalog.pg_proc where oid = 'public.assert_game_storage_quota(uuid,bigint)'::regprocedure), 'shared quota checker is SECURITY DEFINER');
+select is((select pg_catalog.replace(proconfig[1], '"', '') from pg_catalog.pg_proc where oid = 'public.assert_game_storage_quota(uuid,bigint)'::regprocedure), 'search_path=', 'shared quota checker has an empty search_path');
+select is((select pg_catalog.pg_get_userbyid(proowner) from pg_catalog.pg_proc where oid = 'public.assert_game_storage_quota(uuid,bigint)'::regprocedure), 'postgres', 'shared quota checker owner is postgres');
+select ok(has_function_privilege('service_role', 'public.assert_game_storage_quota(uuid,bigint)', 'EXECUTE') and not has_function_privilege('authenticated', 'public.assert_game_storage_quota(uuid,bigint)', 'EXECUTE'), 'only the trusted server role can invoke the quota checker');
 
 select ok(
   exists (
@@ -70,6 +75,14 @@ values ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'storage-test@example.invalid', 
 insert into auth.users (id, email, invited_at, raw_user_meta_data)
 values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'storage-other@example.invalid', now(), '{}'::jsonb);
 
+insert into auth.users (id, email, invited_at, raw_user_meta_data)
+values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'storage-uninvited@example.invalid', null, '{"invited_at":"2099-01-01"}'::jsonb);
+
+select throws_ok(
+  $$select * from public.reserve_game_upload('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'denied.gb', 'Denied', 'gb', 1, '33333333-3333-4333-8333-333333333333')$$,
+  '42501', 'Invited account required', 'client metadata cannot authorize an uninvited R2 reservation'
+);
+
 create temporary table upload_fixture on commit drop as
 select *
 from public.reserve_game_upload(
@@ -79,7 +92,7 @@ from public.reserve_game_upload(
 );
 
 select is((select count(*)::integer from public.upload_sessions where user_id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'), 1, 'reservation creates exactly one pending upload');
-select like((select staging_object_key from upload_fixture), 'users/dddddddd-dddd-4ddd-8ddd-dddddddddddd/games/%/rom/original', 'reserved key is scoped below the authenticated owner prefix');
+select alike((select staging_object_key from upload_fixture), 'users/dddddddd-dddd-4ddd-8ddd-dddddddddddd/games/%/rom/original', 'reserved key is scoped below the authenticated owner prefix');
 
 select is((
   select reserved_upload_id
@@ -128,11 +141,20 @@ select throws_ok(
 );
 select throws_ok(
   $$select * from public.complete_game_upload('dddddddd-dddd-4ddd-8ddd-dddddddddddd', (select reserved_upload_id from upload_fixture), 99, repeat('a', 64))$$,
-  '22023', 'Upload session is not eligible for completion', 'completion rejects a verified size that differs from the reservation'
+  '22023', 'Completed upload metadata does not match the stored game', 'completed R2 retry rejects a changed verified size'
+);
+select throws_ok(
+  $$select * from public.complete_game_upload('dddddddd-dddd-4ddd-8ddd-dddddddddddd', (select reserved_upload_id from upload_fixture), 100, repeat('b', 64))$$,
+  '22023', 'Completed upload metadata does not match the stored game', 'completed R2 retry rejects a changed SHA-256 checksum'
 );
 select throws_ok(
   $$select * from public.complete_game_upload('dddddddd-dddd-4ddd-8ddd-dddddddddddd', (select reserved_upload_id from upload_fixture), 100, 'not-a-sha256')$$,
   '22023', 'Invalid verified upload metadata', 'completion rejects a malformed content hash'
+);
+delete from public.games where id = (select reserved_game_id from upload_fixture);
+select throws_ok(
+  $$select * from public.complete_game_upload('dddddddd-dddd-4ddd-8ddd-dddddddddddd', (select reserved_upload_id from upload_fixture), 100, repeat('a', 64))$$,
+  'P0002', 'Completed upload has no associated game record', 'completed R2 retry fails explicitly when its game row is missing'
 );
 
 create temporary table expiring_upload_fixture on commit drop as
@@ -158,6 +180,30 @@ select is(
   0,
   'expired reservation is excluded from active upload status'
 );
+
+create temporary table full_quota_upload_fixture on commit drop as
+select * from public.reserve_game_upload(
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'full.gb', 'Full quota', 'gb', 900000000,
+  '44444444-4444-4444-8444-444444444444'
+);
+update public.upload_sessions
+set expires_at = now() - interval '1 second'
+where id = (select reserved_upload_id from full_quota_upload_fixture);
+select is(public.expire_game_upload(
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  (select reserved_upload_id from full_quota_upload_fixture)
+), true, 'full quota reservation can expire without deleting its object record');
+select throws_ok(
+  $$select * from public.reserve_game_upload('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'blocked.gb', 'Blocked', 'gb', 1, '55555555-5555-4555-8555-555555555555')$$,
+  '23514', 'User storage quota exceeded', 'expired R2 reservation keeps quota until cleanup is confirmed'
+);
+update public.upload_sessions
+set object_cleanup_completed_at = now()
+where id = (select reserved_upload_id from full_quota_upload_fixture);
+select is((select count(*)::integer from public.reserve_game_upload(
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'after-cleanup.gb', 'After cleanup', 'gb', 900000000,
+  '66666666-6666-4666-8666-666666666666'
+)), 1, 'confirmed object cleanup releases the expired R2 quota hold');
 
 select * from finish();
 rollback;

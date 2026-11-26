@@ -13,6 +13,10 @@ import {
 } from "../../../src/lib/google-drive/contracts.mjs";
 import { decryptDriveSecret, encryptDriveSecret } from "../../../src/lib/google-drive/crypto.mjs";
 import {
+  classifyDriveReconciliationFiles,
+  classifyDriveReconciliationProbe,
+} from "../../../src/lib/google-drive/reconciliation-contracts.mjs";
+import {
   buildDriveAuthorizationUrl,
   createDriveOAuthParameters,
   equalOAuthState,
@@ -109,6 +113,37 @@ test("completion requires Google-confirmed size, owner, game marker and checksum
   assert.equal(isOwnedDriveGameMetadata(metadata, { ...expected, providerChecksum: metadata.md5Checksum, requireCanDownload: true }), true);
   assert.equal(isOwnedDriveGameMetadata({ ...metadata, capabilities: { canDownload: false } }, { ...expected, requireCanDownload: true }), false);
   assert.equal(isOwnedDriveGameMetadata(metadata, { ...expected, providerChecksum: "ffffffffffffffffffffffffffffffff" }), false);
+});
+
+test("Drive cleanup probe keeps active uploads charged and routes unavailable states safely", () => {
+  assert.equal(classifyDriveReconciliationProbe(308, 1), "retry");
+  assert.equal(classifyDriveReconciliationProbe(308, 3), "manual_review");
+  assert.equal(classifyDriveReconciliationProbe(404, 1), "inspect_files");
+  assert.equal(classifyDriveReconciliationProbe(410, 1), "inspect_files");
+  assert.equal(classifyDriveReconciliationProbe(201, 1), "verify_completed_file");
+  assert.equal(classifyDriveReconciliationProbe(403, 1), "manual_review");
+  assert.equal(classifyDriveReconciliationProbe(503, 1), "retry");
+  assert.equal(classifyDriveReconciliationProbe(503, 3), "manual_review");
+});
+
+test("Drive cleanup releases only confirmed absence/trash or completes exact owner metadata", () => {
+  const expected = { sizeBytes: 128, fileName: "game.gb", gameId: "game-id", permissionId: "owner-id" };
+  const validFile = {
+    id: "drive-id",
+    name: "game.gb",
+    size: "128",
+    md5Checksum: "0123456789abcdef0123456789abcdef",
+    appProperties: { pixzerGameId: "game-id" },
+    trashed: false,
+    owners: [{ permissionId: "owner-id" }],
+  };
+  assert.equal(classifyDriveReconciliationFiles([], expected), "confirmed_absent");
+  assert.equal(classifyDriveReconciliationFiles([], expected, true), "manual_review");
+  assert.equal(classifyDriveReconciliationFiles([validFile], expected), "verified_complete");
+  assert.equal(classifyDriveReconciliationFiles([{ ...validFile, size: "127" }], expected), "manual_review");
+  assert.equal(classifyDriveReconciliationFiles([{ ...validFile, owners: [{ permissionId: "other" }] }], expected), "manual_review");
+  assert.equal(classifyDriveReconciliationFiles([{ ...validFile, trashed: true }], expected), "confirmed_trashed");
+  assert.equal(classifyDriveReconciliationFiles([validFile, validFile], expected), "manual_review");
 });
 
 test("download media redirects stay HTTPS and on Google-controlled hosts", () => {
