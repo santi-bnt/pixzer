@@ -125,8 +125,8 @@ run_pair() {
   wait "$pid_a"
   wait "$pid_b"
 
-  accepted="$(grep -hxc 'accepted' "$dir/a" "$dir/b" || true)"
-  rejected="$(grep -hxc 'quota_rejected' "$dir/a" "$dir/b" || true)"
+  accepted="$(cat "$dir/a" "$dir/b" | grep -xc 'accepted' || true)"
+  rejected="$(cat "$dir/a" "$dir/b" | grep -xc 'quota_rejected' || true)"
   if [[ "$accepted" != 1 || "$rejected" != 1 ]]; then
     cat "$dir/a" "$dir/b" >&2
     rm -rf "$dir"
