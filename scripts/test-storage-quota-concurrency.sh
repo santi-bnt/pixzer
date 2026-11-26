@@ -68,14 +68,14 @@ from pg_catalog.generate_series(1, 9) as n;
 create or replace function public.pixzer_ci_quota_delay()
 returns trigger
 language plpgsql
-as $$
+as \$pixzer\$
 begin
   if new.user_id in (${fixture_users}) then
     perform pg_catalog.pg_sleep(3);
   end if;
   return new;
 end;
-$$;
+\$pixzer\$;
 create trigger pixzer_ci_quota_delay_r2
 before insert on public.upload_sessions
 for each row execute function public.pixzer_ci_quota_delay();
