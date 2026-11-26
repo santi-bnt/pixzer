@@ -104,7 +104,8 @@ export async function GET(
         "X-Content-Type-Options": "nosniff",
         "X-Accel-Buffering": "no",
       });
-      headers.set("Content-Length", String(data.size_bytes));
+      // Do not set Content-Length: a later MD5 mismatch must terminate the
+      // streaming response as incomplete instead of looking fully delivered.
       return new Response(checkedBody, { status: 200, headers });
     }
 
