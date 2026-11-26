@@ -5,7 +5,8 @@ import { isOwnedGameObjectKey, isValidUploadId } from "@/lib/r2/upload-validatio
 import { createClient } from "@/lib/supabase/server";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthorizedUser } from "@/lib/supabase/user";
-import { isOwnedDriveGameMetadata, parseSafeDriveMediaRedirect } from "@/lib/google-drive/contracts.mjs";
+import { isOwnedDriveGameMetadata } from "@/lib/google-drive/contracts.mjs";
+import { createIntegrityCheckedDriveStream, fetchDriveMedia } from "@/lib/google-drive/download.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,10 @@ export const maxDuration = 300;
 
 function unavailable(status: number): Response {
   return new Response(null, { status, headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" } });
+}
+
+function safeFileName(value: string): string {
+  return value.normalize("NFC").replace(/[\r\n"\\/\u0000-\u001f\u007f-\u009f]/g, "_").slice(0, 180) || "game.rom";
 }
 
 export async function GET(
@@ -59,7 +64,7 @@ export async function GET(
       const refreshToken = decryptRefreshToken(connection, config.encryptionKey);
       const accessToken = await refreshDriveAccessToken(config, refreshToken);
       const metadataUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(data.provider_file_id)}`);
-      metadataUrl.searchParams.set("fields", "id,name,size,md5Checksum,webContentLink,trashed,appProperties,owners(permissionId),capabilities(canDownload)");
+      metadataUrl.searchParams.set("fields", "id,name,size,md5Checksum,trashed,appProperties,owners(permissionId),capabilities(canDownload)");
       const metadataResponse = await fetch(metadataUrl, {
         headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store", redirect: "error",
       });
@@ -74,23 +79,33 @@ export async function GET(
         providerChecksum: data.provider_checksum ?? undefined,
         requireCanDownload: true,
       })) return unavailable(404);
+      const media = await fetchDriveMedia(fetch, accessToken, data.provider_file_id);
+      if (!media.ok || !media.body) {
+        await media.body?.cancel().catch(() => undefined);
+        return unavailable(502);
+      }
+      const upstreamLength = media.headers.get("content-length");
+      if (upstreamLength !== null && (!/^\d+$/.test(upstreamLength) || Number(upstreamLength) !== Number(data.size_bytes))) {
+        await media.body.cancel().catch(() => undefined);
+        return unavailable(502);
+      }
       const record = metadata as Record<string, unknown>;
-      const destination = parseSafeDriveMediaRedirect(
-        typeof record.webContentLink === "string" ? record.webContentLink : null,
-        metadataUrl.toString(),
+      const checkedBody = createIntegrityCheckedDriveStream(
+        media,
+        Number(data.size_bytes),
+        String(record.md5Checksum),
       );
-      if (!destination) return unavailable(502);
-      // Google documents webContentLink for browser downloads of binary files.
-      // The protected request validates the pixzer account first; ROM bytes
-      // then travel from Drive to the browser, not through Vercel.
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: destination.toString(),
-          "Cache-Control": "private, no-store",
-          "Referrer-Policy": "no-referrer",
-        },
+      const downloadName = safeFileName(data.file_name);
+      const headers = new Headers({
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+        "Cache-Control": "private, no-store",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+        "X-Accel-Buffering": "no",
       });
+      headers.set("Content-Length", String(data.size_bytes));
+      return new Response(checkedBody, { status: 200, headers });
     }
 
     const r2Config = getR2ServerConfig();

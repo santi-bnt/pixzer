@@ -86,8 +86,10 @@ export function parseSafeDriveMediaRedirect(location, baseUrl) {
   try {
     const destination = new URL(location, baseUrl);
     const allowedHost = destination.hostname === "www.googleapis.com" ||
-      destination.hostname === "drive.google.com" || destination.hostname.endsWith(".googleusercontent.com");
-    if (destination.protocol !== "https:" || !allowedHost || destination.username || destination.password) return null;
+      destination.hostname === "drive.google.com" ||
+      destination.hostname === "drive.usercontent.google.com" ||
+      destination.hostname.endsWith(".googleusercontent.com");
+    if (destination.protocol !== "https:" || !allowedHost || destination.username || destination.password || destination.port) return null;
     return destination;
   } catch {
     return null;
