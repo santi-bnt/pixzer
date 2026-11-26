@@ -14,6 +14,79 @@ create unique index if not exists upload_sessions_game_id_idx
   on public.upload_sessions (game_id)
   where game_id is not null;
 
+-- Shared, serialized quota calculation for R2 and Google Drive. The Drive
+-- table is optional here so migration 0003 remains valid before 0004.
+-- Expiration alone never releases quota: provider cleanup must be confirmed.
+create or replace function public.assert_game_storage_quota(
+  p_user_id uuid,
+  p_expected_size_bytes bigint
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  committed_user_bytes bigint;
+  reserved_user_bytes bigint;
+  committed_global_bytes bigint;
+  reserved_global_bytes bigint;
+  drive_user_bytes bigint := 0;
+  drive_global_bytes bigint := 0;
+begin
+  if p_user_id is null or p_expected_size_bytes is null or p_expected_size_bytes < 1 then
+    raise exception 'Invalid game storage quota request' using errcode = '22023';
+  end if;
+
+  -- Every provider takes this transaction-scoped lock before inserting a hold.
+  perform pg_catalog.pg_advisory_xact_lock(740031, 1);
+
+  select coalesce(pg_catalog.sum(game.size_bytes), 0)
+    into committed_user_bytes
+    from public.games as game
+   where game.user_id = p_user_id;
+  select coalesce(pg_catalog.sum(game.size_bytes), 0)
+    into committed_global_bytes
+    from public.games as game;
+  select coalesce(pg_catalog.sum(upload.expected_size_bytes), 0)
+    into reserved_user_bytes
+    from public.upload_sessions as upload
+   where upload.user_id = p_user_id
+     and upload.status <> 'completed'
+     and upload.object_cleanup_completed_at is null;
+  select coalesce(pg_catalog.sum(upload.expected_size_bytes), 0)
+    into reserved_global_bytes
+    from public.upload_sessions as upload
+   where upload.status <> 'completed'
+     and upload.object_cleanup_completed_at is null;
+
+  -- Dynamic SQL avoids a parse-time reference to the 0004 relation.
+  if pg_catalog.to_regclass('public.drive_upload_sessions') is not null then
+    execute
+      'select coalesce(pg_catalog.sum(expected_size_bytes), 0) ' ||
+      'from public.drive_upload_sessions ' ||
+      'where user_id = $1 and status <> ''completed'' ' ||
+      'and object_cleanup_completed_at is null'
+      into drive_user_bytes
+      using p_user_id;
+    execute
+      'select coalesce(pg_catalog.sum(expected_size_bytes), 0) ' ||
+      'from public.drive_upload_sessions ' ||
+      'where status <> ''completed'' and object_cleanup_completed_at is null'
+      into drive_global_bytes;
+  end if;
+
+  if committed_user_bytes + reserved_user_bytes + drive_user_bytes + p_expected_size_bytes > 900000000 then
+    raise exception 'User storage quota exceeded' using errcode = '23514';
+  end if;
+  if committed_global_bytes + reserved_global_bytes + drive_global_bytes + p_expected_size_bytes > 9000000000 then
+    raise exception 'Shared storage reserve exceeded' using errcode = '23514';
+  end if;
+end;
+$$;
+
+alter function public.assert_game_storage_quota(uuid, bigint) owner to postgres;
+
 create or replace function public.reserve_game_upload(
   p_user_id uuid,
   p_file_name text,
@@ -35,10 +108,6 @@ set search_path = ''
 as $$
 declare
   existing_session public.upload_sessions%rowtype;
-  committed_user_bytes bigint;
-  pending_user_bytes bigint;
-  committed_global_bytes bigint;
-  pending_global_bytes bigint;
   new_upload_id uuid := pg_catalog.gen_random_uuid();
   new_game_id uuid := pg_catalog.gen_random_uuid();
   new_object_key text;
@@ -68,6 +137,13 @@ begin
     or (p_console = 'n64' and pg_catalog.lower(p_file_name) ~ '\.(n64|z64|v64)$')
   ) then
     raise exception 'Unsupported console and file extension' using errcode = '22023';
+  end if;
+
+  if not exists (
+    select 1 from auth.users as invited_user
+    where invited_user.id = p_user_id and invited_user.invited_at is not null
+  ) then
+    raise exception 'Invited account required' using errcode = '42501';
   end if;
 
   -- Serialize all quota reservations so both account and shared limits are race-safe.
@@ -105,39 +181,12 @@ begin
     where upload.user_id = p_user_id
       and upload.status in ('pending', 'uploaded')
       and upload.expires_at > pg_catalog.clock_timestamp()
+      and upload.object_cleanup_completed_at is null
   ) >= 2 then
     raise exception 'Too many active game uploads' using errcode = '23514';
   end if;
 
-  select coalesce(pg_catalog.sum(game.size_bytes), 0)
-  into committed_user_bytes
-  from public.games as game
-  where game.user_id = p_user_id;
-
-  select coalesce(pg_catalog.sum(upload.expected_size_bytes), 0)
-  into pending_user_bytes
-  from public.upload_sessions as upload
-  where upload.user_id = p_user_id
-    and upload.status in ('pending', 'uploaded')
-    and upload.expires_at > pg_catalog.clock_timestamp();
-
-  select coalesce(pg_catalog.sum(game.size_bytes), 0)
-  into committed_global_bytes
-  from public.games as game;
-
-  select coalesce(pg_catalog.sum(upload.expected_size_bytes), 0)
-  into pending_global_bytes
-  from public.upload_sessions as upload
-  where upload.status in ('pending', 'uploaded')
-    and upload.expires_at > pg_catalog.clock_timestamp();
-
-  if committed_user_bytes + pending_user_bytes + p_expected_size_bytes > 900000000 then
-    raise exception 'User storage quota exceeded' using errcode = '23514';
-  end if;
-
-  if committed_global_bytes + pending_global_bytes + p_expected_size_bytes > 9000000000 then
-    raise exception 'Shared storage reserve exceeded' using errcode = '23514';
-  end if;
+  perform public.assert_game_storage_quota(p_user_id, p_expected_size_bytes);
 
   new_object_key := 'users/' || p_user_id::text || '/games/' || new_game_id::text || '/rom/original';
 
@@ -208,6 +257,7 @@ set search_path = ''
 as $$
 declare
   upload public.upload_sessions%rowtype;
+  completed_game public.games%rowtype;
 begin
   if p_user_id is null
     or p_upload_id is null
@@ -231,9 +281,28 @@ begin
   end if;
 
   if upload.status = 'completed' then
-    return query select game.id, game.size_bytes
+    select game.*
+      into completed_game
       from public.games as game
-      where game.id = upload.game_id and game.user_id = p_user_id;
+     where game.id = upload.game_id
+       and game.user_id = p_user_id
+     for update;
+
+    if not found then
+      raise exception 'Completed upload has no associated game record'
+        using errcode = 'P0002';
+    end if;
+
+    if upload.expected_size_bytes <> p_verified_size_bytes
+      or completed_game.size_bytes <> p_verified_size_bytes
+      or completed_game.sha256 <> p_sha256
+      or completed_game.object_key <> upload.object_key
+    then
+      raise exception 'Completed upload metadata does not match the stored game'
+        using errcode = '22023';
+    end if;
+
+    return query select completed_game.id, completed_game.size_bytes;
     return;
   end if;
 
@@ -246,6 +315,13 @@ begin
 
   if upload.object_key <> 'users/' || p_user_id::text || '/games/' || upload.game_id::text || '/rom/original' then
     raise exception 'Upload object key does not match its reservation' using errcode = '42501';
+  end if;
+
+  if not exists (
+    select 1 from auth.users as invited_user
+    where invited_user.id = p_user_id and invited_user.invited_at is not null
+  ) then
+    raise exception 'Invited account required' using errcode = '42501';
   end if;
 
   insert into public.games (
@@ -278,12 +354,16 @@ $$;
 
 revoke all on function public.reserve_game_upload(uuid, text, text, text, bigint, uuid)
   from public, anon, authenticated;
+revoke all on function public.assert_game_storage_quota(uuid, bigint)
+  from public, anon, authenticated;
 revoke all on function public.expire_game_upload(uuid, uuid)
   from public, anon, authenticated;
 revoke all on function public.complete_game_upload(uuid, uuid, bigint, text)
   from public, anon, authenticated;
 
 grant execute on function public.reserve_game_upload(uuid, text, text, text, bigint, uuid)
+  to service_role;
+grant execute on function public.assert_game_storage_quota(uuid, bigint)
   to service_role;
 grant execute on function public.expire_game_upload(uuid, uuid)
   to service_role;
