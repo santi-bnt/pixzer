@@ -6,6 +6,7 @@ export type DriveUploadInput = { fileName: string; title: string; sizeBytes: num
 export type DriveUploadValidation = { fileName: string; title: string; sizeBytes: number; console: string };
 export function validateDriveGameUpload(input: unknown): DriveUploadValidation | null;
 export function nextDriveChunkRange(offset: number, totalBytes: number, chunkBytes?: number): {start:number;end:number;length:number;contentRange:string}|null;
+export function parseDriveUploadChunkRange(value: unknown, expectedSizeBytes: number, maxChunkBytes?: number): {start:number;end:number;totalBytes:number;length:number}|null;
 export function parseDriveUploadOffset(rangeHeader: string|null, totalBytes: number): number|null;
 export function selectPersistedDriveUploadCapability(claimed: unknown, winner: unknown, now?: number): {
   ciphertext: string;

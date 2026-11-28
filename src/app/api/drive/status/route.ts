@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthorizedUser } from "@/lib/supabase/user";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
 import { decryptRefreshToken, fetchDriveAbout, getGoogleDriveConfig, isGoogleDriveSelectedAndEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,10 @@ export async function GET(): Promise<Response> {
     return NextResponse.json({ connected: false, configured: false }, { headers: { "Cache-Control": "private, no-store" } });
   }
 
+  const rateLimit = await consumeDriveRateLimit(user.id, "drive_status");
+  const rateLimitFailure = driveRateLimitResponse(rateLimit);
+  if (rateLimitFailure) return rateLimitFailure;
+
   const { data, error } = await supabase.from("drive_connections")
     .select("drive_permission_id, refresh_token_ciphertext, refresh_token_nonce, refresh_token_tag")
     .eq("user_id", user.id).maybeSingle();
@@ -23,7 +28,7 @@ export async function GET(): Promise<Response> {
   }
 
   try {
-    const refreshToken = decryptRefreshToken(data, config.encryptionKey);
+    const refreshToken = decryptRefreshToken(data, config.encryptionKey, config.previousEncryptionKey);
     const accessToken = await refreshDriveAccessToken(config, refreshToken);
     const about = await fetchDriveAbout(accessToken);
     if (about.permissionId !== data.drive_permission_id) {

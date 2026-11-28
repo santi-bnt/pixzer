@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthorizedUser } from "@/lib/supabase/user";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
 import { decryptRefreshToken, getGoogleDriveConfig, revokeDriveToken } from "@/lib/google-drive/server";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 import { isJsonRequest, isSameOriginMutation } from "@/lib/r2/route-security";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,9 @@ export async function POST(request: Request): Promise<Response> {
   if (!isJsonRequest(request)) return NextResponse.json({ error: "invalid-request" }, { status: 415 });
   const user = await getAuthorizedUser();
   if (!user) return NextResponse.json({ error: "invited-account-required" }, { status: 401 });
+  const rateLimit = await consumeDriveRateLimit(user.id, "drive_disconnect");
+  const rateLimitFailure = driveRateLimitResponse(rateLimit);
+  if (rateLimitFailure) return rateLimitFailure;
   const supabase = createPrivilegedSupabaseClient();
   const config = getGoogleDriveConfig();
   if (!supabase) return NextResponse.json({ error: "drive-not-configured" }, { status: 503 });
@@ -30,7 +34,7 @@ export async function POST(request: Request): Promise<Response> {
 
   if (config && data?.refresh_token_ciphertext && data.refresh_token_nonce && data.refresh_token_tag) {
     try {
-      const refreshToken = decryptRefreshToken(data, config.encryptionKey);
+      const refreshToken = decryptRefreshToken(data, config.encryptionKey, config.previousEncryptionKey);
       await revokeDriveToken(refreshToken);
     } catch {
       // Local credentials are already removed; revocation can be repeated from the Google account UI.

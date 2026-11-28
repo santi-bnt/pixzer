@@ -4,6 +4,7 @@ import { getAuthorizedUser } from "@/lib/supabase/user";
 import { GOOGLE_DRIVE_FILE_SCOPE } from "@/lib/google-drive/contracts.mjs";
 import { equalOAuthState } from "@/lib/google-drive/oauth-flow.mjs";
 import { decryptRefreshToken, encryptRefreshToken, exchangeDriveCode, fetchDriveAbout, getGoogleDriveConfig, isGoogleDriveSelectedAndEnabled, refreshDriveAccessToken, revokeDriveToken } from "@/lib/google-drive/server";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ function returnToLibrary(siteUrl: string, result: "connected" | "failed" | "cons
   return response;
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<Response> {
   const user = await getAuthorizedUser();
   const config = getGoogleDriveConfig();
   const siteUrl = config ? new URL(config.redirectUri).origin :
@@ -31,6 +32,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       !equalOAuthState(expectedState, state) || !verifier || !code ||
       request.nextUrl.searchParams.has("error")) {
     return returnToLibrary(siteUrl, "failed");
+  }
+
+  const rateLimit = await consumeDriveRateLimit(user.id, "drive_oauth_callback");
+  const rateLimitFailure = driveRateLimitResponse(rateLimit);
+  if (rateLimitFailure) {
+    const response = returnToLibrary(siteUrl, "failed");
+    const retryAfter = rateLimitFailure.headers.get("Retry-After");
+    if (retryAfter) response.headers.set("Retry-After", retryAfter);
+    return response;
   }
 
   try {
@@ -65,7 +75,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const sameDriveAccount = previous?.drive_permission_id === about.permissionId;
     const refreshToken = token.refresh_token ?? (sameDriveAccount && previous?.refresh_token_ciphertext &&
       previous.refresh_token_nonce && previous.refresh_token_tag
-      ? decryptRefreshToken(previous, config.encryptionKey)
+      ? decryptRefreshToken(previous, config.encryptionKey, config.previousEncryptionKey)
       : null);
     if (!refreshToken) {
       await revokeDriveToken(token.access_token);
@@ -97,7 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (previous?.drive_permission_id && previous.drive_permission_id !== about.permissionId &&
         previous.refresh_token_ciphertext && previous.refresh_token_nonce && previous.refresh_token_tag) {
       try {
-        await revokeDriveToken(decryptRefreshToken(previous, config.encryptionKey));
+        await revokeDriveToken(decryptRefreshToken(previous, config.encryptionKey, config.previousEncryptionKey));
       } catch {
         // The new connection is saved; a stale prior grant can be revoked in Google's account settings.
       }

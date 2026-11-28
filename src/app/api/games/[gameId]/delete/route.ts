@@ -12,6 +12,7 @@ import {
   refreshDriveAccessToken,
 } from "@/lib/google-drive/server";
 import { isJsonRequest, isSameOriginMutation } from "@/lib/r2/route-security";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 import { isValidUploadId } from "@/lib/r2/upload-validation.mjs";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,10 @@ export async function POST(
       return privateJson({ error: "provider-delete-unavailable" }, 409);
     }
 
+    const rateLimit = await consumeDriveRateLimit(user.id, "drive_delete");
+    const rateLimitFailure = driveRateLimitResponse(rateLimit);
+    if (rateLimitFailure) return rateLimitFailure;
+
     const { data: connection, error: connectionError } = await admin.from("drive_connections")
       .select("drive_permission_id, refresh_token_ciphertext, refresh_token_nonce, refresh_token_tag")
       .eq("user_id", user.id).maybeSingle();
@@ -58,7 +63,7 @@ export async function POST(
       return privateJson({ error: "drive-reauthorization-required" }, 409);
     }
 
-    const refreshToken = decryptRefreshToken(connection, config.encryptionKey);
+    const refreshToken = decryptRefreshToken(connection, config.encryptionKey, config.previousEncryptionKey);
     const accessToken = await refreshDriveAccessToken(config, refreshToken);
     const about = await fetchDriveAbout(accessToken);
     if (about.permissionId !== game.provider_account_id) return privateJson({ error: "drive-reauthorization-required" }, 409);

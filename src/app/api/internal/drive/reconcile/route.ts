@@ -1,12 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { decryptDriveSecret } from "@/lib/google-drive/crypto.mjs";
 import {
   classifyDriveReconciliationFiles,
   classifyDriveReconciliationProbe,
 } from "@/lib/google-drive/reconciliation-contracts.mjs";
 import { isDriveOwnedUploadMetadata } from "@/lib/google-drive/contracts.mjs";
 import {
+  decryptGoogleDriveSecret,
   decryptRefreshToken,
   driveApiRequest,
   fetchDriveAbout,
@@ -85,14 +85,17 @@ function isAuthorized(request: Request): boolean {
   return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
-function sessionUrlFromClaim(claim: CleanupClaim, key: string): string | null {
+function sessionUrlFromClaim(
+  claim: CleanupClaim,
+  config: NonNullable<ReturnType<typeof getGoogleDriveConfig>>,
+): string | null {
   if (!claim.resumable_uri_ciphertext || !claim.resumable_uri_nonce || !claim.resumable_uri_tag) return null;
-  const value = decryptDriveSecret({
+  const value = decryptGoogleDriveSecret({
     version: 1,
     ciphertext: claim.resumable_uri_ciphertext,
     nonce: claim.resumable_uri_nonce,
     tag: claim.resumable_uri_tag,
-  }, key);
+  }, config);
   const parsed = new URL(value);
   if (parsed.origin !== "https://www.googleapis.com" || !parsed.pathname.startsWith("/upload/drive/v3/files")) {
     throw new Error("invalid-resumable-session");
@@ -157,7 +160,7 @@ async function processClaim(
       return "manual";
     }
 
-    const accessToken = await refreshDriveAccessToken(config, decryptRefreshToken(connection, config.encryptionKey));
+    const accessToken = await refreshDriveAccessToken(config, decryptRefreshToken(connection, config.encryptionKey, config.previousEncryptionKey));
     const about = await fetchDriveAbout(accessToken);
     if (about.permissionId !== claim.drive_permission_id) {
       await deferClaim(supabase, claim, "ambiguous_file_state", true);
@@ -166,7 +169,7 @@ async function processClaim(
 
     let completedFileId: string | null = null;
     let uploadReportedComplete = false;
-    const sessionUrl = sessionUrlFromClaim(claim, config.encryptionKey);
+    const sessionUrl = sessionUrlFromClaim(claim, config);
     if (sessionUrl) {
       const probe = await driveApiRequest(accessToken, sessionUrl, {
         method: "PUT",

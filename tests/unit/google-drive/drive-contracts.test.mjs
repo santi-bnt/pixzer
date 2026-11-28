@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
   DRIVE_UPLOAD_CHUNK_BYTES,
@@ -6,12 +7,13 @@ import {
   isDriveOwnedUploadMetadata,
   isOwnedDriveGameMetadata,
   nextDriveChunkRange,
+  parseDriveUploadChunkRange,
   parseDriveUploadOffset,
   parseSafeDriveMediaRedirect,
   selectPersistedDriveUploadCapability,
   validateDriveGameUpload,
 } from "../../../src/lib/google-drive/contracts.mjs";
-import { decryptDriveSecret, encryptDriveSecret } from "../../../src/lib/google-drive/crypto.mjs";
+import { decryptDriveSecret, decryptDriveSecretWithKeyring, encryptDriveSecret } from "../../../src/lib/google-drive/crypto.mjs";
 import {
   classifyDriveReconciliationFiles,
   classifyDriveReconciliationProbe,
@@ -22,6 +24,16 @@ import {
   equalOAuthState,
 } from "../../../src/lib/google-drive/oauth-flow.mjs";
 import { buildSupabaseGoogleOAuthOptions, mapOAuthProviderError } from "../../../src/features/auth/oauth-error-flow.mjs";
+import { createIntegrityCheckedDriveStream, fetchDriveMedia } from "../../../src/lib/google-drive/download.mjs";
+import {
+  DRIVE_UPLOAD_FUNCTION_MAX_SECONDS,
+  DRIVE_UPLOAD_LEASE_SECONDS,
+  DRIVE_UPLOAD_OPERATION_TIMEOUT_MS,
+  driveUploadLeaseRetryDelayMs,
+  isDriveUploadLeaseBusy,
+  parseDriveUploadLeaseResult,
+} from "../../../src/lib/google-drive/lease-contracts.mjs";
+import { driveRateLimitResponse } from "../../../src/lib/google-drive/rate-limit-contracts.mjs";
 
 test("Drive accepts only supported ROM extensions and bounded metadata", () => {
   for (const [fileName, console] of [["a.gb", "gb"], ["b.gbc", "gbc"], ["c.gba", "gba"], ["d.nds", "nds"], ["e.v64", "n64"]]) {
@@ -33,13 +45,50 @@ test("Drive accepts only supported ROM extensions and bounded metadata", () => {
   assert.equal(validateDriveGameUpload({ fileName: "a.gb", title: "Game", sizeBytes: DRIVE_USER_QUOTA_BYTES + 1 }), null);
 });
 
-test("resumable chunk ranges stay aligned and offsets are bounded", () => {
+test("resumable chunk sizes fit proxy limits, accept confirmed offsets, and reject forged ranges", () => {
   assert.equal(DRIVE_UPLOAD_CHUNK_BYTES % (256 * 1024), 0);
+  assert.ok(DRIVE_UPLOAD_CHUNK_BYTES < 4.5 * 1024 * 1024);
   assert.deepEqual(nextDriveChunkRange(0, 10), { start: 0, end: 9, length: 10, contentRange: "bytes 0-9/10" });
-  assert.equal(nextDriveChunkRange(1, 10), null);
+  assert.deepEqual(nextDriveChunkRange(1, 10), { start: 1, end: 9, length: 9, contentRange: "bytes 1-9/10" });
+  assert.deepEqual(parseDriveUploadChunkRange("bytes 0-32767/32768", 32768), {
+    start: 0, end: 32767, totalBytes: 32768, length: 32768,
+  });
+  assert.equal(parseDriveUploadChunkRange("bytes 0-32767/32769", 32768), null);
+  assert.equal(parseDriveUploadChunkRange("bytes 0-8388607/8388608", 8388608), null);
+  assert.equal(parseDriveUploadChunkRange("bytes 0-100/8388608", 8388608), null);
   assert.equal(parseDriveUploadOffset("bytes=0-8388607", 10_000_000), 8_388_608);
   assert.equal(parseDriveUploadOffset("bytes=0-100", 100), null);
   assert.equal(parseDriveUploadOffset("bytes=1-3", 100), null);
+});
+
+test("Drive chunk lease rejects concurrent requests and outlives the bounded function", () => {
+  assert.equal(DRIVE_UPLOAD_LEASE_SECONDS, 360);
+  assert.ok(DRIVE_UPLOAD_LEASE_SECONDS > DRIVE_UPLOAD_FUNCTION_MAX_SECONDS);
+  assert.ok(DRIVE_UPLOAD_OPERATION_TIMEOUT_MS < DRIVE_UPLOAD_FUNCTION_MAX_SECONDS * 1_000);
+  assert.deepEqual(parseDriveUploadLeaseResult([{ acquired: true, lease_expires_at: "2026-11-28T00:06:00.000Z" }]), {
+    kind: "acquired", expiresAt: "2026-11-28T00:06:00.000Z",
+  });
+  assert.deepEqual(parseDriveUploadLeaseResult([{ acquired: false, lease_expires_at: null }]), { kind: "busy" });
+  assert.deepEqual(parseDriveUploadLeaseResult([{ acquired: false, lease_expires_at: "not-null" }]), { kind: "invalid" });
+  assert.deepEqual(parseDriveUploadLeaseResult([]), { kind: "invalid" });
+  assert.equal(isDriveUploadLeaseBusy(409, "drive-upload-busy"), true);
+  assert.equal(isDriveUploadLeaseBusy(409, "drive-upload-offset-mismatch"), false);
+  assert.equal(driveUploadLeaseRetryDelayMs("2", 1), 2_000);
+  assert.equal(driveUploadLeaseRetryDelayMs(null, 5), 3_000);
+});
+
+test("Drive per-user rate-limit rejections are controlled and fail closed", async () => {
+  assert.equal(driveRateLimitResponse({ kind: "allowed", remaining: 2 }), null);
+  const limited = driveRateLimitResponse({ kind: "limited", retryAfterSeconds: 27 });
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("retry-after"), "27");
+  assert.equal(limited.headers.get("cache-control"), "private, no-store");
+  assert.deepEqual(await limited.json(), { error: "drive-rate-limit-exceeded" });
+
+  const unavailable = driveRateLimitResponse({ kind: "unavailable" });
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailable.headers.get("retry-after"), "5");
+  assert.deepEqual(await unavailable.json(), { error: "drive-rate-limit-unavailable" });
 });
 
 test("concurrent Drive upload intents return only the encrypted capability persisted by the reservation winner", () => {
@@ -96,6 +145,19 @@ test("Drive refresh-token encryption authenticates ciphertext", () => {
   assert.throws(() => decryptDriveSecret(encrypted, Buffer.alloc(32, 18).toString("base64")));
 });
 
+test("Drive encryption key rotation reads the prior key while all new ciphertext uses the primary key", () => {
+  const oldKey = Buffer.alloc(32, 19).toString("base64");
+  const newKey = Buffer.alloc(32, 20).toString("base64");
+  const encryptedWithOldKey = encryptDriveSecret("existing-refresh-token", oldKey);
+  const decrypted = decryptDriveSecretWithKeyring(encryptedWithOldKey, newKey, oldKey);
+  assert.equal(decrypted.plaintext, "existing-refresh-token");
+  assert.equal(decrypted.usedPreviousKey, true);
+
+  const encryptedWithNewKey = encryptDriveSecret(decrypted.plaintext, newKey);
+  assert.equal(decryptDriveSecretWithKeyring(encryptedWithNewKey, newKey, oldKey).usedPreviousKey, false);
+  assert.throws(() => decryptDriveSecretWithKeyring(encryptedWithOldKey, newKey));
+});
+
 test("completion requires Google-confirmed size, owner, game marker and checksum", () => {
   const metadata = {
     id: "drive-file-id", name: "game.gb", size: "12", trashed: false,
@@ -148,8 +210,63 @@ test("Drive cleanup releases only confirmed absence/trash or completes exact own
 
 test("download media redirects stay HTTPS and on Google-controlled hosts", () => {
   assert.equal(parseSafeDriveMediaRedirect("https://content.googleusercontent.com/download", "https://www.googleapis.com/drive/v3/files/x")?.hostname, "content.googleusercontent.com");
+  assert.equal(parseSafeDriveMediaRedirect("https://drive.usercontent.google.com/download", "https://www.googleapis.com/drive/v3/files/x")?.hostname, "drive.usercontent.google.com");
   assert.equal(parseSafeDriveMediaRedirect("https://drive.google.com/uc?id=private-file", "https://www.googleapis.com/drive/v3/files/x")?.hostname, "drive.google.com");
   assert.equal(parseSafeDriveMediaRedirect("http://www.googleapis.com/file", "https://www.googleapis.com/"), null);
   assert.equal(parseSafeDriveMediaRedirect("https://www.googleapis.com.attacker.example/file", "https://www.googleapis.com/"), null);
   assert.equal(parseSafeDriveMediaRedirect("https://user:pass@drive.google.com/file", "https://www.googleapis.com/"), null);
+  assert.equal(parseSafeDriveMediaRedirect("https://drive.google.com:8443/file", "https://www.googleapis.com/"), null);
+});
+
+test("Drive media redirect handling bounds redirects and never forwards bearer off the API origin", async () => {
+  const calls = [];
+  const fetcher = async (url, init) => {
+    calls.push({ url: new URL(url), init });
+    if (calls.length === 1) return new Response(null, { status: 302, headers: { Location: "https://drive.usercontent.google.com/download?id=opaque" } });
+    return new Response("rom", { status: 200 });
+  };
+  const response = await fetchDriveMedia(fetcher, "secret-access-token", "valid_file-id");
+  assert.equal(response.status, 200);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].init.headers.Authorization, "Bearer secret-access-token");
+  assert.equal(calls[1].init.headers.Authorization, undefined);
+
+  const sameOriginRedirects = [];
+  await fetchDriveMedia(async (url, init) => {
+    sameOriginRedirects.push({ url: new URL(url), init });
+    return sameOriginRedirects.length === 1
+      ? new Response(null, { status: 302, headers: { Location: "https://www.googleapis.com/drive/v3/files/other" } })
+      : new Response("rom", { status: 200 });
+  }, "secret-access-token", "valid_file-id");
+  assert.equal(sameOriginRedirects[1].init.headers.Authorization, undefined);
+
+  await assert.rejects(
+    fetchDriveMedia(async () => new Response(null, { status: 302, headers: { Location: "https://attacker.example/file" } }), "secret", "id"),
+    /drive-download-redirect-invalid/,
+  );
+});
+
+test("Drive downloads stream bytes and verify expected length and provider MD5", async () => {
+  const content = Buffer.from("authorized test payload");
+  const checksum = createHash("md5").update(content).digest("hex");
+  const source = new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(content.subarray(0, 7));
+      controller.enqueue(content.subarray(7));
+      controller.close();
+    },
+  }), { headers: { "Content-Length": String(content.length) } });
+  const stream = createIntegrityCheckedDriveStream(source, content.length, checksum);
+  assert.deepEqual(Buffer.from(await new Response(stream).arrayBuffer()), content);
+
+  const badLength = new Response("wrong", { headers: { "Content-Length": "5" } });
+  assert.throws(() => createIntegrityCheckedDriveStream(badLength, content.length, checksum), /size-mismatch/);
+
+  const badHashSource = new Response(content);
+  const badHash = createIntegrityCheckedDriveStream(badHashSource, content.length, "00000000000000000000000000000000");
+  await assert.rejects(new Response(badHash).arrayBuffer(), /integrity-failed/);
+
+  const badSizeSource = new Response(content.subarray(0, -1));
+  const badSize = createIntegrityCheckedDriveStream(badSizeSource, content.length, checksum);
+  await assert.rejects(new Response(badSize).arrayBuffer(), /integrity-failed/);
 });

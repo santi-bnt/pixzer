@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthorizedUser } from "@/lib/supabase/user";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
-import { decryptDriveSecret, encryptDriveSecret } from "@/lib/google-drive/crypto.mjs";
-import { selectPersistedDriveUploadCapability, validateDriveGameUpload } from "@/lib/google-drive/contracts.mjs";
-import { decryptRefreshToken, driveApiRequest, getGoogleDriveConfig, areDriveUploadsEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
+import { DRIVE_UPLOAD_CHUNK_BYTES, selectPersistedDriveUploadCapability, validateDriveGameUpload } from "@/lib/google-drive/contracts.mjs";
+import { decryptGoogleDriveSecret, decryptRefreshToken, driveApiRequest, getGoogleDriveConfig, areDriveUploadsEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
+import { encryptDriveSecret } from "@/lib/google-drive/crypto.mjs";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 import { isJsonRequest, isSameOriginMutation } from "@/lib/r2/route-security";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,10 @@ export async function POST(request: Request): Promise<Response> {
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) {
     return privateJson({ error: "invalid-upload-request" }, 400);
   }
+
+  const rateLimit = await consumeDriveRateLimit(user.id, "upload_intent");
+  const rateLimitFailure = driveRateLimitResponse(rateLimit);
+  if (rateLimitFailure) return rateLimitFailure;
 
   try {
     const { data: reservedData, error: reserveError } = await supabase.rpc("reserve_drive_game_upload", {
@@ -69,12 +74,12 @@ export async function POST(request: Request): Promise<Response> {
     }
     let sessionUrl: string | null = null;
     if (existing?.resumable_uri_ciphertext && existing.resumable_uri_nonce && existing.resumable_uri_tag) {
-      sessionUrl = decryptDriveSecret({
+      sessionUrl = decryptGoogleDriveSecret({
         version: 1,
         ciphertext: existing.resumable_uri_ciphertext,
         nonce: existing.resumable_uri_nonce,
         tag: existing.resumable_uri_tag,
-      }, config.encryptionKey);
+      }, config);
     }
     if (!sessionUrl) {
       const { data: connection, error: connectionError } = await supabase.from("drive_connections")
@@ -84,7 +89,7 @@ export async function POST(request: Request): Promise<Response> {
           !connection.refresh_token_tag || connection.drive_permission_id !== row.drive_permission_id) {
         return privateJson({ error: "drive-not-connected" }, 409);
       }
-      const refreshToken = decryptRefreshToken(connection, config.encryptionKey);
+      const refreshToken = decryptRefreshToken(connection, config.encryptionKey, config.previousEncryptionKey);
       const accessToken = await refreshDriveAccessToken(config, refreshToken);
       const initUrl = new URL("https://www.googleapis.com/upload/drive/v3/files");
       initUrl.searchParams.set("uploadType", "resumable");
@@ -127,7 +132,7 @@ export async function POST(request: Request): Promise<Response> {
           { ...claimed, expires_at: existing.expires_at }, null,
         );
         if (!storedCapability) return privateJson({ error: "drive-upload-session-save-failed" }, 503);
-        sessionUrl = decryptDriveSecret({ version: 1, ...storedCapability }, config.encryptionKey);
+        sessionUrl = decryptGoogleDriveSecret({ version: 1, ...storedCapability }, config);
       } else {
         // A concurrent retry may have won the reservation. Return only its
         // persisted capability; never expose this request's uncommitted URI.
@@ -138,7 +143,7 @@ export async function POST(request: Request): Promise<Response> {
         if (winnerError || !storedCapability) {
           return privateJson({ error: "drive-upload-session-save-failed" }, 503);
         }
-        sessionUrl = decryptDriveSecret({ version: 1, ...storedCapability }, config.encryptionKey);
+        sessionUrl = decryptGoogleDriveSecret({ version: 1, ...storedCapability }, config);
       }
     }
 
@@ -146,10 +151,9 @@ export async function POST(request: Request): Promise<Response> {
       completed: false,
       uploadId: row.reserved_upload_id,
       gameId: row.reserved_game_id,
-      sessionUrl,
       expiresAt: existing?.expires_at ?? row.reserved_expires_at,
       expectedSizeBytes: validated.sizeBytes,
-      chunkSizeBytes: 8 * 1024 * 1024,
+      chunkSizeBytes: DRIVE_UPLOAD_CHUNK_BYTES,
     }, 201);
   } catch {
     return privateJson({ error: "drive-upload-unavailable" }, 503);

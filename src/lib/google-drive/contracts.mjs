@@ -1,7 +1,8 @@
 export const GOOGLE_DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const DRIVE_USER_QUOTA_BYTES = 900_000_000;
 export const DRIVE_MAX_GAME_BYTES = 900_000_000;
-export const DRIVE_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+// Keep proxied chunks below Vercel Functions' 4.5 MB request-body ceiling.
+export const DRIVE_UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
 
 const extensionConsole = new Map([
   [".gb", "gb"], [".gbc", "gbc"], [".gba", "gba"],
@@ -25,11 +26,26 @@ export function validateDriveGameUpload(input) {
 export function nextDriveChunkRange(offset, totalBytes, chunkBytes = DRIVE_UPLOAD_CHUNK_BYTES) {
   if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(totalBytes) ||
       !Number.isInteger(chunkBytes) || chunkBytes < 256 * 1024 ||
-      chunkBytes % (256 * 1024) !== 0 || offset < 0 || offset % (256 * 1024) !== 0 || totalBytes < 1 || offset >= totalBytes) {
+      chunkBytes % (256 * 1024) !== 0 || offset < 0 || totalBytes < 1 || offset >= totalBytes) {
     return null;
   }
   const end = Math.min(totalBytes - 1, offset + chunkBytes - 1);
   return { start: offset, end, length: end - offset + 1, contentRange: `bytes ${offset}-${end}/${totalBytes}` };
+}
+
+export function parseDriveUploadChunkRange(value, expectedSizeBytes, maxChunkBytes = DRIVE_UPLOAD_CHUNK_BYTES) {
+  if (typeof value !== "string" || !Number.isSafeInteger(expectedSizeBytes) || expectedSizeBytes < 1 ||
+      !Number.isSafeInteger(maxChunkBytes) || maxChunkBytes < 256 * 1024 || maxChunkBytes % (256 * 1024) !== 0) return null;
+  const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(value);
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const totalBytes = Number(match[3]);
+  const length = end - start + 1;
+  if (![start, end, totalBytes, length].every(Number.isSafeInteger) || start < 0 || end < start ||
+      totalBytes !== expectedSizeBytes || end >= totalBytes || length > maxChunkBytes ||
+      (end < totalBytes - 1 && length % (256 * 1024) !== 0)) return null;
+  return { start, end, totalBytes, length };
 }
 
 export function parseDriveUploadOffset(rangeHeader, totalBytes) {
@@ -86,8 +102,10 @@ export function parseSafeDriveMediaRedirect(location, baseUrl) {
   try {
     const destination = new URL(location, baseUrl);
     const allowedHost = destination.hostname === "www.googleapis.com" ||
-      destination.hostname === "drive.google.com" || destination.hostname.endsWith(".googleusercontent.com");
-    if (destination.protocol !== "https:" || !allowedHost || destination.username || destination.password) return null;
+      destination.hostname === "drive.google.com" ||
+      destination.hostname === "drive.usercontent.google.com" ||
+      destination.hostname.endsWith(".googleusercontent.com");
+    if (destination.protocol !== "https:" || !allowedHost || destination.username || destination.password || destination.port) return null;
     return destination;
   } catch {
     return null;

@@ -3,9 +3,10 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Notice } from "@/components/ui";
-import { validateDriveGameUpload } from "@/lib/google-drive/contracts.mjs";
+import { DRIVE_UPLOAD_CHUNK_BYTES, nextDriveChunkRange, validateDriveGameUpload } from "@/lib/google-drive/contracts.mjs";
+import { driveUploadLeaseRetryDelayMs, isDriveUploadLeaseBusy } from "@/lib/google-drive/lease-contracts.mjs";
 
-type Capability = { uploadId: string; gameId: string; sessionUrl: string; expectedSizeBytes: number; chunkSizeBytes: number };
+type Capability = { uploadId: string; gameId: string; expectedSizeBytes: number; chunkSizeBytes: number };
 const accept = ".gb,.gbc,.gba,.nds,.n64,.z64,.v64";
 const activeUploadKey = "pixzer-drive-active-upload";
 type SavedUpload = { uploadId: string; fileName: string; sizeBytes: number; lastModified: number };
@@ -15,84 +16,127 @@ async function readJson(response: Response): Promise<Record<string, unknown> | n
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
+function waitForLock(response: Response, attempt: number): Promise<void> {
+  const delayMs = driveUploadLeaseRetryDelayMs(response.headers.get("retry-after"), attempt);
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
 function errorText(code: unknown): string {
   switch (code) {
     case "drive-quota-exceeded": return "This file would exceed pixzer’s 900 MB library quota or the active-upload limit.";
     case "drive-not-connected": return "Connect the same Google Drive account before uploading.";
     case "file-too-large": return "A game file must be 900 MB or smaller.";
     case "drive-file-not-confirmed": return "Google Drive has not confirmed this complete file. It was not added to your library.";
+    case "drive-session-expired": return "This upload session expired. Start a new upload to continue.";
+    case "drive-upload-interrupted": return "The connection interrupted the upload. Retry to resume from Google Drive's confirmed position.";
+    case "drive-upload-status-unavailable": return "pixzer could not confirm the upload position. Your game was not marked as available.";
     default: return "The upload could not be confirmed. Your file was not marked as available.";
   }
 }
 
-async function queryOffset(sessionUrl: string, totalBytes: number): Promise<{ offset: number; fileId?: string }> {
-  const response = await fetch(sessionUrl, {
-    method: "PUT",
-    headers: { "Content-Range": `bytes */${totalBytes}` },
-    cache: "no-store",
-  });
-  if (response.status === 200 || response.status === 201) {
+async function queryOffset(uploadId: string, totalBytes: number): Promise<{ offset: number; fileId?: string }> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const response = await fetch(`/api/drive/uploads/${encodeURIComponent(uploadId)}/status`, {
+      credentials: "same-origin", cache: "no-store",
+    });
     const result = await readJson(response);
-    if (typeof result?.id !== "string") throw new Error("drive-upload-response-invalid");
-    return { offset: totalBytes, fileId: result.id };
+    if (isDriveUploadLeaseBusy(response.status, result?.error)) {
+      if (attempt === 4) throw new Error("drive-upload-interrupted");
+      await waitForLock(response, attempt);
+      continue;
+    }
+    if (!response.ok || !result) {
+      if (response.status === 410) throw new Error("drive-session-expired");
+      throw new Error(String(result?.error ?? "drive-upload-status-unavailable"));
+    }
+    if (result.complete === true && typeof result.fileId === "string") return { offset: totalBytes, fileId: result.fileId };
+    const offset = Number(result.offset);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > totalBytes) throw new Error("drive-upload-status-unavailable");
+    return { offset };
   }
-  if (response.status !== 308) throw new Error(response.status === 404 ? "drive-session-expired" : "drive-upload-status-failed");
-  const range = response.headers.get("range");
-  if (!range) return { offset: 0 };
-  const match = /^bytes=0-(\d+)$/.exec(range);
-  if (!match) throw new Error("drive-upload-range-invalid");
-  const offset = Number(match[1]) + 1;
-  if (!Number.isSafeInteger(offset) || offset < 0 || offset > totalBytes) throw new Error("drive-upload-range-invalid");
-  return { offset };
+  throw new Error("drive-upload-interrupted");
 }
 
 async function uploadChunks(capability: Capability, file: File, onProgress: (value: number) => void): Promise<string> {
-  let state = await queryOffset(capability.sessionUrl, file.size);
+  let state = await queryOffset(capability.uploadId, file.size);
   if (state.fileId) return state.fileId;
   let offset = state.offset;
   let attempts = 0;
   while (offset < file.size) {
-    const end = Math.min(file.size, offset + capability.chunkSizeBytes);
-    const response = await fetch(capability.sessionUrl, {
-      method: "PUT",
-      headers: { "Content-Range": `bytes ${offset}-${end - 1}/${file.size}`, "Content-Type": "application/octet-stream" },
-      body: file.slice(offset, end),
-      cache: "no-store",
-    }).catch(() => null);
-    if (!response || response.status >= 500 || response.status === 429 || response.status === 408) {
-      if (attempts++ >= 4) throw new Error("drive-upload-retry-limit");
-      const retryAfter = response?.headers.get("retry-after");
-      const retryAfterMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1_000 : 0;
-      await new Promise((resolve) => setTimeout(resolve, Math.min(8_000, retryAfterMs || 500 * (2 ** attempts))));
-      state = await queryOffset(capability.sessionUrl, file.size);
+    const range = nextDriveChunkRange(offset, file.size, capability.chunkSizeBytes);
+    if (!range) throw new Error("drive-upload-range-invalid");
+    let response: Response;
+    try {
+      response = await fetch(`/api/drive/uploads/${encodeURIComponent(capability.uploadId)}/chunk`, {
+        method: "PUT", credentials: "same-origin", cache: "no-store",
+        headers: { "Content-Range": range.contentRange, "Content-Type": "application/octet-stream" },
+        body: file.slice(range.start, range.end + 1),
+      });
+    } catch {
+      if (attempts++ >= 4) throw new Error("drive-upload-interrupted");
+      state = await queryOffset(capability.uploadId, file.size);
+      if (state.fileId) return state.fileId;
+      offset = state.offset;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(4_000, 250 * (2 ** attempts))));
+      continue;
+    }
+
+    const result = await readJson(response);
+    if (response.status === 410) throw new Error("drive-session-expired");
+    if (response.status === 409 || response.status >= 500) {
+      if (attempts++ >= 4) throw new Error(String(result?.error ?? "drive-upload-interrupted"));
+      state = await queryOffset(capability.uploadId, file.size);
+      if (state.fileId) return state.fileId;
+      offset = state.offset;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(4_000, 250 * (2 ** attempts))));
+      continue;
+    }
+    if (!response.ok || !result) throw new Error(String(result?.error ?? "drive-upload-rejected"));
+    if (result.complete === true && typeof result.fileId === "string") {
+      onProgress(100);
+      return result.fileId;
+    }
+
+    const confirmedOffset = Number(result.offset);
+    if (!Number.isSafeInteger(confirmedOffset) || confirmedOffset < 0 || confirmedOffset > file.size) {
+      throw new Error("drive-upload-range-invalid");
+    }
+    if (confirmedOffset <= offset) {
+      if (attempts++ >= 4) throw new Error("drive-upload-interrupted");
+      state = await queryOffset(capability.uploadId, file.size);
       if (state.fileId) return state.fileId;
       offset = state.offset;
       continue;
     }
-    if (response.status === 200 || response.status === 201) {
-      const result = await readJson(response);
-      if (typeof result?.id !== "string") throw new Error("drive-upload-response-invalid");
-      onProgress(100);
-      return result.id;
-    }
-    if (response.status !== 308) throw new Error(response.status === 404 ? "drive-session-expired" : "drive-upload-rejected");
-    const range = response.headers.get("range");
-    if (range) {
-      const match = /^bytes=0-(\d+)$/.exec(range);
-      if (!match) throw new Error("drive-upload-range-invalid");
-      offset = Number(match[1]) + 1;
-    } else {
-      state = await queryOffset(capability.sessionUrl, file.size);
-      if (state.fileId) return state.fileId;
-      offset = state.offset;
-    }
-    if (!Number.isSafeInteger(offset) || offset < 0 || offset > file.size) throw new Error("drive-upload-range-invalid");
+    offset = confirmedOffset;
     attempts = 0;
     onProgress(Math.min(99, Math.floor(offset / file.size * 100)));
   }
-  const finished = await queryOffset(capability.sessionUrl, file.size);
-  if (!finished.fileId) throw new Error("drive-upload-not-finished");
+
+  const finished = await queryOffset(capability.uploadId, file.size);
+  if (!finished.fileId) throw new Error("drive-upload-status-unavailable");
   return finished.fileId;
+}
+
+async function completeDriveUpload(uploadId: string, driveFileId: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const response = await fetch(`/api/drive/uploads/${encodeURIComponent(uploadId)}/complete`, {
+      method: "POST", credentials: "same-origin", cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ driveFileId }),
+    });
+    const result = await readJson(response);
+    if (isDriveUploadLeaseBusy(response.status, result?.error)) {
+      if (attempt === 4) throw new Error("drive-upload-interrupted");
+      await waitForLock(response, attempt);
+      continue;
+    }
+    if (!response.ok || result?.verified !== true) {
+      throw new Error(String(result?.error ?? "drive-completion-unconfirmed"));
+    }
+    return;
+  }
+  throw new Error("drive-upload-interrupted");
 }
 
 export function DriveUploadForm({ onUploaded }: { onUploaded: () => void }) {
@@ -125,10 +169,11 @@ export function DriveUploadForm({ onUploaded }: { onUploaded: () => void }) {
       if (savedUpload && savedUpload.fileName === file.name && savedUpload.sizeBytes === file.size && savedUpload.lastModified === file.lastModified) {
         const resumeResponse = await fetch(`/api/drive/uploads/${encodeURIComponent(savedUpload.uploadId)}/resume`, { cache: "no-store" });
         const resume = await readJson(resumeResponse);
-        if (resumeResponse.ok && resume && resume.fileName === file.name && Number(resume.expectedSizeBytes) === file.size &&
-            typeof resume.sessionUrl === "string" && typeof resume.gameId === "string") {
-          capability = { uploadId: savedUpload.uploadId, gameId: resume.gameId, sessionUrl: resume.sessionUrl, expectedSizeBytes: file.size, chunkSizeBytes: 8 * 1024 * 1024 };
+        if (!resumeResponse.ok || !resume || typeof resume.gameId !== "string" ||
+            (resume.completed !== true && (resume.fileName !== file.name || Number(resume.expectedSizeBytes) !== file.size))) {
+          throw new Error(String(resume?.error ?? (resumeResponse.status === 410 ? "drive-session-expired" : "drive-upload-status-unavailable")));
         }
+        capability = { uploadId: savedUpload.uploadId, gameId: resume.gameId, expectedSizeBytes: file.size, chunkSizeBytes: DRIVE_UPLOAD_CHUNK_BYTES };
       }
       if (!capability) {
         const intentResponse = await fetch("/api/drive/uploads", {
@@ -137,11 +182,11 @@ export function DriveUploadForm({ onUploaded }: { onUploaded: () => void }) {
           body: JSON.stringify({ ...validated, idempotencyKey: crypto.randomUUID() }),
         });
         const intent = await readJson(intentResponse);
-        if (!intentResponse.ok || !intent || typeof intent.uploadId !== "string" || typeof intent.gameId !== "string" || typeof intent.sessionUrl !== "string") {
+        if (!intentResponse.ok || !intent || typeof intent.uploadId !== "string" || typeof intent.gameId !== "string") {
           throw new Error(String(intent?.error ?? "drive-upload-intent-failed"));
         }
-        capability = { uploadId: intent.uploadId, gameId: intent.gameId, sessionUrl: intent.sessionUrl,
-          expectedSizeBytes: file.size, chunkSizeBytes: Number(intent.chunkSizeBytes) || 8 * 1024 * 1024 };
+        capability = { uploadId: intent.uploadId, gameId: intent.gameId,
+          expectedSizeBytes: file.size, chunkSizeBytes: Number(intent.chunkSizeBytes) || DRIVE_UPLOAD_CHUNK_BYTES };
         try {
           sessionStorage.setItem(activeUploadKey, JSON.stringify({
             uploadId: capability.uploadId,
@@ -156,13 +201,7 @@ export function DriveUploadForm({ onUploaded }: { onUploaded: () => void }) {
 
       const driveFileId = await uploadChunks(capability, file, setProgress);
       setProgress(100);
-      const completionResponse = await fetch(`/api/drive/uploads/${encodeURIComponent(capability.uploadId)}/complete`, {
-        method: "POST", credentials: "same-origin", cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driveFileId }),
-      });
-      const completion = await readJson(completionResponse);
-      if (!completionResponse.ok || completion?.verified !== true) throw new Error(String(completion?.error ?? "drive-completion-unconfirmed"));
+      await completeDriveUpload(capability.uploadId, driveFileId);
       sessionStorage.removeItem(activeUploadKey);
       setComplete(true);
       router.refresh();
@@ -191,7 +230,7 @@ export function DriveUploadForm({ onUploaded }: { onUploaded: () => void }) {
         <input className="min-h-11 w-full rounded-xl border border-token bg-surface-soft px-3 text-sm" disabled={busy} id="drive-game-title" maxLength={160} onChange={(event) => setTitle(event.currentTarget.value)} required value={title} />
       </div>}
       {busy && <div aria-live="polite" className="space-y-2">
-        <div className="flex justify-between text-xs text-muted"><span>Uploading directly to Google Drive</span><span>{progress}%</span></div>
+        <div className="flex justify-between text-xs text-muted"><span>Uploading through pixzer to Google Drive</span><span>{progress}%</span></div>
         <div aria-label="Drive upload progress" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress} className="h-2 overflow-hidden rounded-full bg-surface-raised" role="progressbar"><div className="h-full bg-accent transition-[width]" style={{ width: `${progress}%` }} /></div>
       </div>}
       {error && <p className="notice-error text-sm" role="alert">{error}</p>}
