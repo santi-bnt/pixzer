@@ -3,10 +3,13 @@ import { getAuthorizedUser } from "@/lib/supabase/user";
 import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
 import { decryptRefreshToken, driveApiRequest, getGoogleDriveConfig, areDriveUploadsEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
 import { isDriveOwnedUploadMetadata } from "@/lib/google-drive/contracts.mjs";
+import { acquireDriveUploadLease, releaseDriveUploadLease } from "@/lib/google-drive/upload-lease";
 import { isSameOriginMutation, isJsonRequest } from "@/lib/r2/route-security";
 import { isValidUploadId } from "@/lib/r2/upload-validation.mjs";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 type CompletedDriveGameRow = {
   id: string;
@@ -44,6 +47,7 @@ export async function POST(request: Request, context: { params: Promise<{ upload
   const config = getGoogleDriveConfig();
   const supabase = createPrivilegedSupabaseClient();
   if (!config || !supabase) return NextResponse.json({ error: "drive-storage-not-configured" }, { status: 503 });
+  let leaseId: string | null = null;
   try {
     const { data: session, error: sessionError } = await supabase.from("drive_upload_sessions")
       .select("game_id, file_name, expected_size_bytes, drive_permission_id, status, expires_at")
@@ -84,6 +88,30 @@ export async function POST(request: Request, context: { params: Promise<{ upload
     if (session.status !== "uploading" || Date.parse(session.expires_at) <= Date.now()) {
       return NextResponse.json({ error: "upload-expired" }, { status: 410 });
     }
+
+    const acquired = await acquireDriveUploadLease(user.id, uploadId);
+    if (acquired.kind === "busy") {
+      return NextResponse.json({ error: "drive-upload-busy" }, { status: 409, headers: { "Retry-After": "2", "Cache-Control": "private, no-store" } });
+    }
+    if (acquired.kind !== "acquired") {
+      return NextResponse.json({ error: "drive-upload-lock-unavailable" }, { status: 503, headers: { "Retry-After": "2", "Cache-Control": "private, no-store" } });
+    }
+    leaseId = acquired.lease.leaseId;
+
+    // Re-read under the lease to close the gap between the initial state check
+    // and acquiring the distributed claim.
+    const { data: lockedSession, error: lockedSessionError } = await supabase.from("drive_upload_sessions")
+      .select("game_id, file_name, expected_size_bytes, drive_permission_id, status, expires_at")
+      .eq("id", uploadId).eq("user_id", user.id).maybeSingle();
+    if (lockedSessionError || !lockedSession) return NextResponse.json({ error: "upload-unavailable" }, { status: 404 });
+    if (lockedSession.status === "completed") {
+      return NextResponse.json({ error: "drive-upload-busy" }, { status: 409, headers: { "Retry-After": "1", "Cache-Control": "private, no-store" } });
+    }
+    if (lockedSession.status !== "uploading" || Date.parse(lockedSession.expires_at) <= Date.now()) {
+      return NextResponse.json({ error: "upload-expired" }, { status: 410 });
+    }
+    // Use only metadata read after this request owns the lease.
+    Object.assign(session, lockedSession);
 
     const { data: connection, error: connectionError } = await supabase.from("drive_connections")
       .select("drive_permission_id, refresh_token_ciphertext, refresh_token_nonce, refresh_token_tag")
@@ -126,5 +154,7 @@ export async function POST(request: Request, context: { params: Promise<{ upload
     });
   } catch {
     return NextResponse.json({ error: "drive-completion-unconfirmed" }, { status: 503 });
+  } finally {
+    if (leaseId) await releaseDriveUploadLease(user.id, uploadId, leaseId);
   }
 }

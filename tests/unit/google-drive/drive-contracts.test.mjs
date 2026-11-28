@@ -25,6 +25,14 @@ import {
 } from "../../../src/lib/google-drive/oauth-flow.mjs";
 import { buildSupabaseGoogleOAuthOptions, mapOAuthProviderError } from "../../../src/features/auth/oauth-error-flow.mjs";
 import { createIntegrityCheckedDriveStream, fetchDriveMedia } from "../../../src/lib/google-drive/download.mjs";
+import {
+  DRIVE_UPLOAD_FUNCTION_MAX_SECONDS,
+  DRIVE_UPLOAD_LEASE_SECONDS,
+  DRIVE_UPLOAD_OPERATION_TIMEOUT_MS,
+  driveUploadLeaseRetryDelayMs,
+  isDriveUploadLeaseBusy,
+  parseDriveUploadLeaseResult,
+} from "../../../src/lib/google-drive/lease-contracts.mjs";
 
 test("Drive accepts only supported ROM extensions and bounded metadata", () => {
   for (const [fileName, console] of [["a.gb", "gb"], ["b.gbc", "gbc"], ["c.gba", "gba"], ["d.nds", "nds"], ["e.v64", "n64"]]) {
@@ -50,6 +58,22 @@ test("resumable chunk sizes fit proxy limits, accept confirmed offsets, and reje
   assert.equal(parseDriveUploadOffset("bytes=0-8388607", 10_000_000), 8_388_608);
   assert.equal(parseDriveUploadOffset("bytes=0-100", 100), null);
   assert.equal(parseDriveUploadOffset("bytes=1-3", 100), null);
+});
+
+test("Drive chunk lease rejects concurrent requests and outlives the bounded function", () => {
+  assert.equal(DRIVE_UPLOAD_LEASE_SECONDS, 360);
+  assert.ok(DRIVE_UPLOAD_LEASE_SECONDS > DRIVE_UPLOAD_FUNCTION_MAX_SECONDS);
+  assert.ok(DRIVE_UPLOAD_OPERATION_TIMEOUT_MS < DRIVE_UPLOAD_FUNCTION_MAX_SECONDS * 1_000);
+  assert.deepEqual(parseDriveUploadLeaseResult([{ acquired: true, lease_expires_at: "2026-11-28T00:06:00.000Z" }]), {
+    kind: "acquired", expiresAt: "2026-11-28T00:06:00.000Z",
+  });
+  assert.deepEqual(parseDriveUploadLeaseResult([{ acquired: false, lease_expires_at: null }]), { kind: "busy" });
+  assert.deepEqual(parseDriveUploadLeaseResult([{ acquired: false, lease_expires_at: "not-null" }]), { kind: "invalid" });
+  assert.deepEqual(parseDriveUploadLeaseResult([]), { kind: "invalid" });
+  assert.equal(isDriveUploadLeaseBusy(409, "drive-upload-busy"), true);
+  assert.equal(isDriveUploadLeaseBusy(409, "drive-upload-offset-mismatch"), false);
+  assert.equal(driveUploadLeaseRetryDelayMs("2", 1), 2_000);
+  assert.equal(driveUploadLeaseRetryDelayMs(null, 5), 3_000);
 });
 
 test("concurrent Drive upload intents return only the encrypted capability persisted by the reservation winner", () => {

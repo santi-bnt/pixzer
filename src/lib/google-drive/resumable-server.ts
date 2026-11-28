@@ -24,7 +24,7 @@ export type DriveUploadSessionStatus =
   | { kind: "incomplete"; offset: number }
   | { kind: "complete"; fileId: string }
   | { kind: "expired" }
-  | { kind: "unavailable" };
+  | { kind: "unavailable"; safeToReleaseLease: boolean };
 
 /** Load a caller-owned upload session and keep its resumable URI server-side. */
 export async function getOwnedDriveUpload(userId: string, uploadId: string): Promise<OwnedDriveUpload | OwnedCompletedDriveUpload | null> {
@@ -79,26 +79,40 @@ export async function getOwnedDriveUpload(userId: string, uploadId: string): Pro
 }
 
 /** Query Drive's resumable state server-side; its session URI is a bearer capability. */
-export async function getDriveUploadSessionStatus(upload: OwnedDriveUpload): Promise<DriveUploadSessionStatus> {
+export async function getDriveUploadSessionStatus(
+  upload: OwnedDriveUpload,
+  signal?: AbortSignal,
+): Promise<DriveUploadSessionStatus> {
+  let response: Response;
   try {
-    const response = await fetch(upload.sessionUrl, {
+    response = await fetch(upload.sessionUrl, {
       method: "PUT",
       headers: { "Content-Range": `bytes */${upload.expectedSizeBytes}` },
       cache: "no-store",
       redirect: "manual",
+      signal,
     });
-    if (response.status === 404) return { kind: "expired" };
-    if (response.status === 308) {
-      if (response.headers.has("location")) return { kind: "unavailable" };
-      const offset = parseDriveUploadOffset(response.headers.get("range"), upload.expectedSizeBytes);
-      return offset === null ? { kind: "unavailable" } : { kind: "incomplete", offset };
-    }
-    if (response.status !== 200 && response.status !== 201) return { kind: "unavailable" };
-    const value: unknown = await response.json().catch(() => null);
-    if (typeof value !== "object" || value === null || Array.isArray(value) ||
-        typeof (value as Record<string, unknown>).id !== "string") return { kind: "unavailable" };
-    return { kind: "complete", fileId: (value as Record<string, string>).id };
   } catch {
-    return { kind: "unavailable" };
+    // A timeout or disconnect leaves the provider request's outcome uncertain.
+    // Its lease must expire naturally before another instance can touch the URI.
+    return { kind: "unavailable", safeToReleaseLease: false };
   }
+
+  if (response.status === 404) return { kind: "expired" };
+  if (response.status === 308) {
+    if (response.headers.has("location")) return { kind: "unavailable", safeToReleaseLease: true };
+    const offset = parseDriveUploadOffset(response.headers.get("range"), upload.expectedSizeBytes);
+    return offset === null
+      ? { kind: "unavailable", safeToReleaseLease: true }
+      : { kind: "incomplete", offset };
+  }
+  if (response.status !== 200 && response.status !== 201) {
+    return { kind: "unavailable", safeToReleaseLease: true };
+  }
+  const value: unknown = await response.json().catch(() => null);
+  if (typeof value !== "object" || value === null || Array.isArray(value) ||
+      typeof (value as Record<string, unknown>).id !== "string") {
+    return { kind: "unavailable", safeToReleaseLease: true };
+  }
+  return { kind: "complete", fileId: (value as Record<string, string>).id };
 }

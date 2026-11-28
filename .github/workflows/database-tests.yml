@@ -48,7 +48,7 @@ jobs:
           set -euo pipefail
           supabase --workdir "$SUPABASE_CI_WORKDIR" db reset --local --no-seed
 
-      - name: Run and verify all four pgTAP suites
+      - name: Run and verify all five pgTAP suites
         shell: bash
         run: |
           set -euo pipefail
@@ -61,20 +61,24 @@ jobs:
             echo "Supabase pgTAP failed; see complete output above." >&2
             exit "$status"
           fi
-          for suite in 0002_auth_rls.test.sql 0003_profile_provisioning.test.sql 0004_private_game_uploads.test.sql 0005_google_drive_storage.test.sql; do
+          for suite in 0002_auth_rls.test.sql 0003_profile_provisioning.test.sql 0004_private_game_uploads.test.sql 0005_google_drive_storage.test.sql 0006_google_drive_upload_leases.test.sql; do
             if ! grep -E "${suite}.*\.\. ok$" "$log" >/dev/null; then
               echo "Missing successful pgTAP suite: ${suite}" >&2
               exit 1
             fi
           done
-          if ! grep -E 'Files=[[:space:]]*4,[[:space:]]*Tests=166' "$log" >/dev/null || ! grep -F 'Result: PASS' "$log" >/dev/null; then
-            echo "Expected four suites and 166 executed assertions; summary was absent or different." >&2
+          if ! grep -E 'Files=[[:space:]]*5,[[:space:]]*Tests=195' "$log" >/dev/null || ! grep -F 'Result: PASS' "$log" >/dev/null; then
+            echo "Expected five suites and 195 executed assertions; summary was absent or different." >&2
             exit 1
           fi
 
       - name: Verify concurrent per-user and global quota enforcement
         shell: bash
         run: bash scripts/test-storage-quota-concurrency.sh "$SUPABASE_CI_WORKDIR"
+
+      - name: Verify concurrent Google Drive lease claims
+        shell: bash
+        run: bash scripts/test-drive-upload-lease-concurrency.sh "$SUPABASE_CI_WORKDIR"
 
       - name: Stop disposable Supabase stack
         if: always()

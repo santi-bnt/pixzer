@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Notice } from "@/components/ui";
 import { DRIVE_UPLOAD_CHUNK_BYTES, nextDriveChunkRange, validateDriveGameUpload } from "@/lib/google-drive/contracts.mjs";
+import { driveUploadLeaseRetryDelayMs, isDriveUploadLeaseBusy } from "@/lib/google-drive/lease-contracts.mjs";
 
 type Capability = { uploadId: string; gameId: string; expectedSizeBytes: number; chunkSizeBytes: number };
 const accept = ".gb,.gbc,.gba,.nds,.n64,.z64,.v64";
@@ -13,6 +14,11 @@ type SavedUpload = { uploadId: string; fileName: string; sizeBytes: number; last
 async function readJson(response: Response): Promise<Record<string, unknown> | null> {
   const value: unknown = await response.json().catch(() => null);
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function waitForLock(response: Response, attempt: number): Promise<void> {
+  const delayMs = driveUploadLeaseRetryDelayMs(response.headers.get("retry-after"), attempt);
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function errorText(code: unknown): string {
@@ -29,18 +35,26 @@ function errorText(code: unknown): string {
 }
 
 async function queryOffset(uploadId: string, totalBytes: number): Promise<{ offset: number; fileId?: string }> {
-  const response = await fetch(`/api/drive/uploads/${encodeURIComponent(uploadId)}/status`, {
-    credentials: "same-origin", cache: "no-store",
-  });
-  const result = await readJson(response);
-  if (!response.ok || !result) {
-    if (response.status === 410) throw new Error("drive-session-expired");
-    throw new Error(String(result?.error ?? "drive-upload-status-unavailable"));
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const response = await fetch(`/api/drive/uploads/${encodeURIComponent(uploadId)}/status`, {
+      credentials: "same-origin", cache: "no-store",
+    });
+    const result = await readJson(response);
+    if (isDriveUploadLeaseBusy(response.status, result?.error)) {
+      if (attempt === 4) throw new Error("drive-upload-interrupted");
+      await waitForLock(response, attempt);
+      continue;
+    }
+    if (!response.ok || !result) {
+      if (response.status === 410) throw new Error("drive-session-expired");
+      throw new Error(String(result?.error ?? "drive-upload-status-unavailable"));
+    }
+    if (result.complete === true && typeof result.fileId === "string") return { offset: totalBytes, fileId: result.fileId };
+    const offset = Number(result.offset);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > totalBytes) throw new Error("drive-upload-status-unavailable");
+    return { offset };
   }
-  if (result.complete === true && typeof result.fileId === "string") return { offset: totalBytes, fileId: result.fileId };
-  const offset = Number(result.offset);
-  if (!Number.isSafeInteger(offset) || offset < 0 || offset > totalBytes) throw new Error("drive-upload-status-unavailable");
-  return { offset };
+  throw new Error("drive-upload-interrupted");
 }
 
 async function uploadChunks(capability: Capability, file: File, onProgress: (value: number) => void): Promise<string> {
@@ -102,6 +116,27 @@ async function uploadChunks(capability: Capability, file: File, onProgress: (val
   const finished = await queryOffset(capability.uploadId, file.size);
   if (!finished.fileId) throw new Error("drive-upload-status-unavailable");
   return finished.fileId;
+}
+
+async function completeDriveUpload(uploadId: string, driveFileId: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const response = await fetch(`/api/drive/uploads/${encodeURIComponent(uploadId)}/complete`, {
+      method: "POST", credentials: "same-origin", cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ driveFileId }),
+    });
+    const result = await readJson(response);
+    if (isDriveUploadLeaseBusy(response.status, result?.error)) {
+      if (attempt === 4) throw new Error("drive-upload-interrupted");
+      await waitForLock(response, attempt);
+      continue;
+    }
+    if (!response.ok || result?.verified !== true) {
+      throw new Error(String(result?.error ?? "drive-completion-unconfirmed"));
+    }
+    return;
+  }
+  throw new Error("drive-upload-interrupted");
 }
 
 export function DriveUploadForm({ onUploaded }: { onUploaded: () => void }) {
@@ -166,13 +201,7 @@ export function DriveUploadForm({ onUploaded }: { onUploaded: () => void }) {
 
       const driveFileId = await uploadChunks(capability, file, setProgress);
       setProgress(100);
-      const completionResponse = await fetch(`/api/drive/uploads/${encodeURIComponent(capability.uploadId)}/complete`, {
-        method: "POST", credentials: "same-origin", cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driveFileId }),
-      });
-      const completion = await readJson(completionResponse);
-      if (!completionResponse.ok || completion?.verified !== true) throw new Error(String(completion?.error ?? "drive-completion-unconfirmed"));
+      await completeDriveUpload(capability.uploadId, driveFileId);
       sessionStorage.removeItem(activeUploadKey);
       setComplete(true);
       router.refresh();
