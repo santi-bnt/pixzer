@@ -33,6 +33,7 @@ import {
   isDriveUploadLeaseBusy,
   parseDriveUploadLeaseResult,
 } from "../../../src/lib/google-drive/lease-contracts.mjs";
+import { driveRateLimitResponse } from "../../../src/lib/google-drive/rate-limit-contracts.mjs";
 
 test("Drive accepts only supported ROM extensions and bounded metadata", () => {
   for (const [fileName, console] of [["a.gb", "gb"], ["b.gbc", "gbc"], ["c.gba", "gba"], ["d.nds", "nds"], ["e.v64", "n64"]]) {
@@ -74,6 +75,20 @@ test("Drive chunk lease rejects concurrent requests and outlives the bounded fun
   assert.equal(isDriveUploadLeaseBusy(409, "drive-upload-offset-mismatch"), false);
   assert.equal(driveUploadLeaseRetryDelayMs("2", 1), 2_000);
   assert.equal(driveUploadLeaseRetryDelayMs(null, 5), 3_000);
+});
+
+test("Drive per-user rate-limit rejections are controlled and fail closed", async () => {
+  assert.equal(driveRateLimitResponse({ kind: "allowed", remaining: 2 }), null);
+  const limited = driveRateLimitResponse({ kind: "limited", retryAfterSeconds: 27 });
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("retry-after"), "27");
+  assert.equal(limited.headers.get("cache-control"), "private, no-store");
+  assert.deepEqual(await limited.json(), { error: "drive-rate-limit-exceeded" });
+
+  const unavailable = driveRateLimitResponse({ kind: "unavailable" });
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailable.headers.get("retry-after"), "5");
+  assert.deepEqual(await unavailable.json(), { error: "drive-rate-limit-unavailable" });
 });
 
 test("concurrent Drive upload intents return only the encrypted capability persisted by the reservation winner", () => {

@@ -12,6 +12,7 @@ import {
   refreshDriveAccessToken,
 } from "@/lib/google-drive/server";
 import { isJsonRequest, isSameOriginMutation } from "@/lib/r2/route-security";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 import { isValidUploadId } from "@/lib/r2/upload-validation.mjs";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,10 @@ export async function POST(
         typeof game.provider_account_id !== "string" || typeof game.provider_checksum !== "string") {
       return privateJson({ error: "provider-delete-unavailable" }, 409);
     }
+
+    const rateLimit = await consumeDriveRateLimit(user.id, "drive_delete");
+    const rateLimitFailure = driveRateLimitResponse(rateLimit);
+    if (rateLimitFailure) return rateLimitFailure;
 
     const { data: connection, error: connectionError } = await admin.from("drive_connections")
       .select("drive_permission_id, refresh_token_ciphertext, refresh_token_nonce, refresh_token_tag")

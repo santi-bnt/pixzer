@@ -25,6 +25,7 @@ const migrationMap = [
   ["0003_private_game_uploads.sql", "20261125000001_private_game_uploads.sql"],
   ["0004_google_drive_storage.sql", "20261125000002_google_drive_storage.sql"],
   ["0005_google_drive_upload_leases.sql", "20261125000003_google_drive_upload_leases.sql"],
+  ["0006_drive_user_rate_limits.sql", "20261125000004_drive_user_rate_limits.sql"],
 ];
 
 const existing = (await readdir(path.join(source, "migrations"))).sort();
@@ -47,6 +48,7 @@ for (const name of [
   "0004_private_game_uploads.test.sql",
   "0005_google_drive_storage.test.sql",
   "0006_google_drive_upload_leases.test.sql",
+  "0007_drive_user_rate_limits.test.sql",
 ]) {
   await cp(path.join(source, "tests", name), path.join(tests, name));
 }

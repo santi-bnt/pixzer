@@ -4,6 +4,7 @@ import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
 import { DRIVE_UPLOAD_CHUNK_BYTES, selectPersistedDriveUploadCapability, validateDriveGameUpload } from "@/lib/google-drive/contracts.mjs";
 import { decryptGoogleDriveSecret, decryptRefreshToken, driveApiRequest, getGoogleDriveConfig, areDriveUploadsEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
 import { encryptDriveSecret } from "@/lib/google-drive/crypto.mjs";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 import { isJsonRequest, isSameOriginMutation } from "@/lib/r2/route-security";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,10 @@ export async function POST(request: Request): Promise<Response> {
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) {
     return privateJson({ error: "invalid-upload-request" }, 400);
   }
+
+  const rateLimit = await consumeDriveRateLimit(user.id, "upload_intent");
+  const rateLimitFailure = driveRateLimitResponse(rateLimit);
+  if (rateLimitFailure) return rateLimitFailure;
 
   try {
     const { data: reservedData, error: reserveError } = await supabase.rpc("reserve_drive_game_upload", {

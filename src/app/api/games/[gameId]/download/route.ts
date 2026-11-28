@@ -7,6 +7,7 @@ import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthorizedUser } from "@/lib/supabase/user";
 import { isOwnedDriveGameMetadata } from "@/lib/google-drive/contracts.mjs";
 import { createIntegrityCheckedDriveStream, fetchDriveMedia } from "@/lib/google-drive/download.mjs";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +51,9 @@ export async function GET(
     if (error || !data || data.user_id !== user.id) return unavailable(404);
 
     if (data.storage_provider === "google_drive") {
+      const rateLimit = await consumeDriveRateLimit(user.id, "drive_download");
+      const rateLimitFailure = driveRateLimitResponse(rateLimit);
+      if (rateLimitFailure) return rateLimitFailure;
       if (process.env.PIXZER_GOOGLE_DRIVE_ENABLED !== "true" ||
           typeof data.provider_file_id !== "string" || typeof data.provider_account_id !== "string") return unavailable(503);
       const config = getGoogleDriveConfig();

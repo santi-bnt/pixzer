@@ -4,6 +4,7 @@ import { createPrivilegedSupabaseClient } from "@/lib/supabase/admin";
 import { decryptRefreshToken, driveApiRequest, getGoogleDriveConfig, areDriveUploadsEnabled, refreshDriveAccessToken } from "@/lib/google-drive/server";
 import { isDriveOwnedUploadMetadata } from "@/lib/google-drive/contracts.mjs";
 import { acquireDriveUploadLease, releaseDriveUploadLease } from "@/lib/google-drive/upload-lease";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 import { isSameOriginMutation, isJsonRequest } from "@/lib/r2/route-security";
 import { isValidUploadId } from "@/lib/r2/upload-validation.mjs";
 
@@ -43,6 +44,10 @@ export async function POST(request: Request, context: { params: Promise<{ upload
   if (typeof input.driveFileId !== "string" || input.driveFileId.length < 1 || input.driveFileId.length > 256) {
     return NextResponse.json({ error: "invalid-request" }, { status: 400 });
   }
+
+  const rateLimit = await consumeDriveRateLimit(user.id, "upload_complete");
+  const rateLimitFailure = driveRateLimitResponse(rateLimit);
+  if (rateLimitFailure) return rateLimitFailure;
 
   const config = getGoogleDriveConfig();
   const supabase = createPrivilegedSupabaseClient();

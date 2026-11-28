@@ -3,6 +3,7 @@ import { getAuthorizedUser } from "@/lib/supabase/user";
 import { isValidUploadId } from "@/lib/r2/upload-validation.mjs";
 import { getDriveUploadSessionStatus, getOwnedDriveUpload } from "@/lib/google-drive/resumable-server";
 import { acquireDriveUploadLease, releaseDriveUploadLease } from "@/lib/google-drive/upload-lease";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 import { DRIVE_UPLOAD_OPERATION_TIMEOUT_MS } from "@/lib/google-drive/lease-contracts.mjs";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,9 @@ export async function GET(request: Request, context: { params: Promise<{ uploadI
 
   const upload = await getOwnedDriveUpload(user.id, uploadId);
   if (!upload) return privateJson({ error: "upload-unavailable" }, 404);
+  const rateLimit = await consumeDriveRateLimit(user.id, "upload_status");
+  const rateLimitFailure = driveRateLimitResponse(rateLimit);
+  if (rateLimitFailure) return rateLimitFailure;
   if (upload.kind === "completed") {
     return privateJson({ complete: true, gameId: upload.gameId, fileId: upload.driveFileId });
   }

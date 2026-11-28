@@ -3,6 +3,7 @@ import { DRIVE_UPLOAD_CHUNK_BYTES, parseDriveUploadChunkRange, parseDriveUploadO
 import { getDriveUploadSessionStatus, getOwnedDriveUpload } from "@/lib/google-drive/resumable-server";
 import { DRIVE_UPLOAD_OPERATION_TIMEOUT_MS } from "@/lib/google-drive/lease-contracts.mjs";
 import { acquireDriveUploadLease, releaseDriveUploadLease } from "@/lib/google-drive/upload-lease";
+import { consumeDriveRateLimit, driveRateLimitResponse } from "@/lib/google-drive/rate-limit";
 import { isSameOriginMutation } from "@/lib/r2/route-security";
 import { isValidUploadId } from "@/lib/r2/upload-validation.mjs";
 import { getAuthorizedUser } from "@/lib/supabase/user";
@@ -44,6 +45,10 @@ export async function PUT(request: Request, context: { params: Promise<{ uploadI
   if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) !== chunk.length)) {
     return privateJson({ error: "invalid-upload-chunk" }, 400);
   }
+
+  const rateLimit = await consumeDriveRateLimit(user.id, "upload_chunk");
+  const rateLimitFailure = driveRateLimitResponse(rateLimit);
+  if (rateLimitFailure) return rateLimitFailure;
 
   // The row update in PostgreSQL is the distributed compare-and-set. No network
   // request to Google's resumable URI is made unless this invocation owns it.
