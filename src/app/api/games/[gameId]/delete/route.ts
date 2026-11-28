@@ -58,7 +58,7 @@ export async function POST(
       return privateJson({ error: "drive-reauthorization-required" }, 409);
     }
 
-    const refreshToken = decryptRefreshToken(connection, config.encryptionKey);
+    const refreshToken = decryptRefreshToken(connection, config.encryptionKey, config.previousEncryptionKey);
     const accessToken = await refreshDriveAccessToken(config, refreshToken);
     const about = await fetchDriveAbout(accessToken);
     if (about.permissionId !== game.provider_account_id) return privateJson({ error: "drive-reauthorization-required" }, 409);

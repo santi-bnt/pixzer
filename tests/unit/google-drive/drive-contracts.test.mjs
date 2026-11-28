@@ -7,12 +7,13 @@ import {
   isDriveOwnedUploadMetadata,
   isOwnedDriveGameMetadata,
   nextDriveChunkRange,
+  parseDriveUploadChunkRange,
   parseDriveUploadOffset,
   parseSafeDriveMediaRedirect,
   selectPersistedDriveUploadCapability,
   validateDriveGameUpload,
 } from "../../../src/lib/google-drive/contracts.mjs";
-import { decryptDriveSecret, encryptDriveSecret } from "../../../src/lib/google-drive/crypto.mjs";
+import { decryptDriveSecret, decryptDriveSecretWithKeyring, encryptDriveSecret } from "../../../src/lib/google-drive/crypto.mjs";
 import {
   classifyDriveReconciliationFiles,
   classifyDriveReconciliationProbe,
@@ -35,10 +36,17 @@ test("Drive accepts only supported ROM extensions and bounded metadata", () => {
   assert.equal(validateDriveGameUpload({ fileName: "a.gb", title: "Game", sizeBytes: DRIVE_USER_QUOTA_BYTES + 1 }), null);
 });
 
-test("resumable chunk ranges stay aligned and offsets are bounded", () => {
+test("resumable chunk sizes fit proxy limits, accept confirmed offsets, and reject forged ranges", () => {
   assert.equal(DRIVE_UPLOAD_CHUNK_BYTES % (256 * 1024), 0);
+  assert.ok(DRIVE_UPLOAD_CHUNK_BYTES < 4.5 * 1024 * 1024);
   assert.deepEqual(nextDriveChunkRange(0, 10), { start: 0, end: 9, length: 10, contentRange: "bytes 0-9/10" });
-  assert.equal(nextDriveChunkRange(1, 10), null);
+  assert.deepEqual(nextDriveChunkRange(1, 10), { start: 1, end: 9, length: 9, contentRange: "bytes 1-9/10" });
+  assert.deepEqual(parseDriveUploadChunkRange("bytes 0-32767/32768", 32768), {
+    start: 0, end: 32767, totalBytes: 32768, length: 32768,
+  });
+  assert.equal(parseDriveUploadChunkRange("bytes 0-32767/32769", 32768), null);
+  assert.equal(parseDriveUploadChunkRange("bytes 0-8388607/8388608", 8388608), null);
+  assert.equal(parseDriveUploadChunkRange("bytes 0-100/8388608", 8388608), null);
   assert.equal(parseDriveUploadOffset("bytes=0-8388607", 10_000_000), 8_388_608);
   assert.equal(parseDriveUploadOffset("bytes=0-100", 100), null);
   assert.equal(parseDriveUploadOffset("bytes=1-3", 100), null);
@@ -96,6 +104,19 @@ test("Drive refresh-token encryption authenticates ciphertext", () => {
   assert.equal(decryptDriveSecret(encrypted, key), "refresh-secret-test");
   assert.throws(() => decryptDriveSecret({ ...encrypted, ciphertext: `${encrypted.ciphertext.slice(0, -4)}AAAA` }, key));
   assert.throws(() => decryptDriveSecret(encrypted, Buffer.alloc(32, 18).toString("base64")));
+});
+
+test("Drive encryption key rotation reads the prior key while all new ciphertext uses the primary key", () => {
+  const oldKey = Buffer.alloc(32, 19).toString("base64");
+  const newKey = Buffer.alloc(32, 20).toString("base64");
+  const encryptedWithOldKey = encryptDriveSecret("existing-refresh-token", oldKey);
+  const decrypted = decryptDriveSecretWithKeyring(encryptedWithOldKey, newKey, oldKey);
+  assert.equal(decrypted.plaintext, "existing-refresh-token");
+  assert.equal(decrypted.usedPreviousKey, true);
+
+  const encryptedWithNewKey = encryptDriveSecret(decrypted.plaintext, newKey);
+  assert.equal(decryptDriveSecretWithKeyring(encryptedWithNewKey, newKey, oldKey).usedPreviousKey, false);
+  assert.throws(() => decryptDriveSecretWithKeyring(encryptedWithOldKey, newKey));
 });
 
 test("completion requires Google-confirmed size, owner, game marker and checksum", () => {

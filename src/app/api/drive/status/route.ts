@@ -23,7 +23,7 @@ export async function GET(): Promise<Response> {
   }
 
   try {
-    const refreshToken = decryptRefreshToken(data, config.encryptionKey);
+    const refreshToken = decryptRefreshToken(data, config.encryptionKey, config.previousEncryptionKey);
     const accessToken = await refreshDriveAccessToken(config, refreshToken);
     const about = await fetchDriveAbout(accessToken);
     if (about.permissionId !== data.drive_permission_id) {

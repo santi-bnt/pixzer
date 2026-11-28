@@ -61,7 +61,7 @@ export async function GET(
       if (connectionError || !connection?.refresh_token_ciphertext || !connection.refresh_token_nonce ||
           !connection.refresh_token_tag || connection.drive_permission_id !== data.provider_account_id) return unavailable(409);
 
-      const refreshToken = decryptRefreshToken(connection, config.encryptionKey);
+      const refreshToken = decryptRefreshToken(connection, config.encryptionKey, config.previousEncryptionKey);
       const accessToken = await refreshDriveAccessToken(config, refreshToken);
       const metadataUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(data.provider_file_id)}`);
       metadataUrl.searchParams.set("fields", "id,name,size,md5Checksum,trashed,appProperties,owners(permissionId),capabilities(canDownload)");

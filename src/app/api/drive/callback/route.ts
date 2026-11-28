@@ -65,7 +65,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const sameDriveAccount = previous?.drive_permission_id === about.permissionId;
     const refreshToken = token.refresh_token ?? (sameDriveAccount && previous?.refresh_token_ciphertext &&
       previous.refresh_token_nonce && previous.refresh_token_tag
-      ? decryptRefreshToken(previous, config.encryptionKey)
+      ? decryptRefreshToken(previous, config.encryptionKey, config.previousEncryptionKey)
       : null);
     if (!refreshToken) {
       await revokeDriveToken(token.access_token);
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (previous?.drive_permission_id && previous.drive_permission_id !== about.permissionId &&
         previous.refresh_token_ciphertext && previous.refresh_token_nonce && previous.refresh_token_tag) {
       try {
-        await revokeDriveToken(decryptRefreshToken(previous, config.encryptionKey));
+        await revokeDriveToken(decryptRefreshToken(previous, config.encryptionKey, config.previousEncryptionKey));
       } catch {
         // The new connection is saved; a stale prior grant can be revoked in Google's account settings.
       }

@@ -43,3 +43,19 @@ export function decryptDriveSecret(payload, keyBase64) {
     decipher.final(),
   ]).toString("utf8");
 }
+
+export function decryptDriveSecretWithKeyring(payload, primaryKeyBase64, previousKeyBase64 = null) {
+  const keys = [primaryKeyBase64, previousKeyBase64].filter(
+    (key, index, all) => typeof key === "string" && key.length > 0 && all.indexOf(key) === index,
+  );
+  if (keys.length === 0) throw new Error("drive-token-key-invalid");
+
+  for (const key of keys) {
+    try {
+      return { plaintext: decryptDriveSecret(payload, key), usedPreviousKey: key !== primaryKeyBase64 };
+    } catch {
+      // Try the explicitly configured previous key; never log ciphertext or key material.
+    }
+  }
+  throw new Error("drive-token-decryption-failed");
+}

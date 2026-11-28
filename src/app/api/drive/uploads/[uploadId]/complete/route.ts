@@ -92,7 +92,7 @@ export async function POST(request: Request, context: { params: Promise<{ upload
         !connection.refresh_token_tag || connection.drive_permission_id !== session.drive_permission_id) {
       return NextResponse.json({ error: "drive-not-connected" }, { status: 409 });
     }
-    const refreshToken = decryptRefreshToken(connection, config.encryptionKey);
+    const refreshToken = decryptRefreshToken(connection, config.encryptionKey, config.previousEncryptionKey);
     const accessToken = await refreshDriveAccessToken(config, refreshToken);
     const metadataUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(input.driveFileId)}`);
     metadataUrl.searchParams.set("fields", "id,name,size,mimeType,md5Checksum,appProperties,trashed,owners(permissionId)");

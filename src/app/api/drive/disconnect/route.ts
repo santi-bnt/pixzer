@@ -30,7 +30,7 @@ export async function POST(request: Request): Promise<Response> {
 
   if (config && data?.refresh_token_ciphertext && data.refresh_token_nonce && data.refresh_token_tag) {
     try {
-      const refreshToken = decryptRefreshToken(data, config.encryptionKey);
+      const refreshToken = decryptRefreshToken(data, config.encryptionKey, config.previousEncryptionKey);
       await revokeDriveToken(refreshToken);
     } catch {
       // Local credentials are already removed; revocation can be repeated from the Google account UI.

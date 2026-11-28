@@ -1,6 +1,6 @@
 import "server-only";
 
-import { decryptDriveSecret, encryptDriveSecret } from "@/lib/google-drive/crypto.mjs";
+import { decryptDriveSecretWithKeyring, encryptDriveSecret } from "@/lib/google-drive/crypto.mjs";
 import type { EncryptedDriveSecret } from "@/lib/google-drive/crypto.mjs";
 import { GOOGLE_DRIVE_FILE_SCOPE } from "@/lib/google-drive/contracts.mjs";
 
@@ -9,6 +9,7 @@ export type GoogleDriveConfig = {
   clientSecret: string;
   redirectUri: string;
   encryptionKey: string;
+  previousEncryptionKey: string | null;
 };
 
 export function isGoogleDriveSelectedAndEnabled(): boolean {
@@ -25,6 +26,7 @@ export function getGoogleDriveConfig(): GoogleDriveConfig | null {
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET?.trim();
   const encryptionKey = process.env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY?.trim();
+  const previousEncryptionKey = process.env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY_PREVIOUS?.trim() || null;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (!clientId || !clientSecret || !encryptionKey || !siteUrl) return null;
 
@@ -33,10 +35,12 @@ export function getGoogleDriveConfig(): GoogleDriveConfig | null {
     if (origin.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(origin.hostname)) return null;
     const key = Buffer.from(encryptionKey, "base64");
     if (key.byteLength !== 32) return null;
+    if (previousEncryptionKey && Buffer.from(previousEncryptionKey, "base64").byteLength !== 32) return null;
     return {
       clientId,
       clientSecret,
       encryptionKey,
+      previousEncryptionKey,
       redirectUri: new URL("/api/drive/callback", origin).toString(),
     };
   } catch {
@@ -59,13 +63,24 @@ export function encryptRefreshToken(refreshToken: string, key: string): DriveCon
   };
 }
 
-export function decryptRefreshToken(row: DriveConnectionCipher, key: string): string {
-  return decryptDriveSecret({
+export function decryptGoogleDriveSecret(
+  payload: EncryptedDriveSecret,
+  config: Pick<GoogleDriveConfig, "encryptionKey" | "previousEncryptionKey">,
+): string {
+  return decryptDriveSecretWithKeyring(payload, config.encryptionKey, config.previousEncryptionKey).plaintext;
+}
+
+export function decryptRefreshToken(
+  row: DriveConnectionCipher,
+  key: string,
+  previousKey: string | null = null,
+): string {
+  return decryptDriveSecretWithKeyring({
     version: 1,
     ciphertext: row.refresh_token_ciphertext,
     nonce: row.refresh_token_nonce,
     tag: row.refresh_token_tag,
-  } satisfies EncryptedDriveSecret, key);
+  } satisfies EncryptedDriveSecret, key, previousKey).plaintext;
 }
 
 type GoogleTokenResponse = {
